@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guess my rule</title>
+<title>Guess Dr. Devil's rule</title>
 <style>
   :root {
     --ink: #22303a;
@@ -77,11 +77,11 @@
 </head>
 <body>
 <main>
-  <h1>Guess my rule</h1>
+  <h1>Guess Dr. Devil's rule</h1>
 
   <section id="playing">
-    <p>I have a rule in mind. It decides whether a set of three numbers fits or not. The set <strong>2, 4, 6</strong> fits.</p>
-    <p>Test any sets you like and I'll tell you whether each one fits. When you're confident you know the rule, write it down.</p>
+    <p>Dr. Devil has a rule in mind. It decides whether a set of three numbers fits or not. The set <strong>2, 4, 6</strong> fits.</p>
+    <p>Test any sets you like and Dr. Devil will tell you whether each one fits. When you're confident you know the rule, write it down.</p>
 
     <div class="triple">
       <input id="a" type="number" inputmode="numeric" aria-label="First number">
@@ -100,7 +100,7 @@
   </section>
 
   <section id="stating" hidden>
-    <h2>What is the rule?</h2>
+    <h2>What is Dr. Devil's rule?</h2>
     <textarea id="rule-text" placeholder="A set of three numbers fits when..."></textarea>
     <fieldset>
       <legend>How sure are you?</legend>
@@ -116,7 +116,7 @@
   </section>
 
   <section id="reveal" hidden>
-    <h2>The rule was</h2>
+    <h2>Dr. Devil's rule was</h2>
     <div class="rule" id="rule-name"></div>
     <p>You wrote: <em id="your-rule"></em></p>
     <p><strong>Did your rule match?</strong></p>
@@ -166,10 +166,16 @@
     return data;
   }
 
-  function addRow(a, b, c, fits) {
+  function addRow(a, b, c, fits, note) {
     const row = document.createElement('div');
-    row.innerHTML = `<span>${a}, ${b}, ${c}</span><span class="${fits ? 'fits' : 'nofit'}">${fits ? 'fits' : 'does not fit'}</span>`;
+    row.innerHTML = `<span>${a}, ${b}, ${c}${note ? ` <span class="muted">(${note})</span>` : ''}</span><span class="${fits ? 'fits' : 'nofit'}">${fits ? 'fits' : 'does not fit'}</span>`;
     $('ledger').prepend(row);
+  }
+
+  // The example set from the instructions, shown as the first entry in the list. Not counted as an attempt.
+  function seedLedger() {
+    $('ledger').innerHTML = '';
+    addRow(2, 4, 6, true, 'given');
   }
 
   function showVerdict(fits, extra) {
@@ -196,9 +202,10 @@
     }
   });
 
-  for (const k of ['a', 'b', 'c']) {
-    $(k).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('test').click(); });
-  }
+  // Enter moves to the next box; from the last box it tests the set.
+  $('a').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('b').focus(); } });
+  $('b').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('c').focus(); } });
+  $('c').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('test').click(); } });
 
   $('ready').addEventListener('click', () => {
     if (practice) { show('done'); return; }
@@ -211,7 +218,7 @@
     const ruleText = $('rule-text').value.trim();
     const conf = document.querySelector('input[name="conf"]:checked');
     $('err-finish').textContent = '';
-    if (!ruleText) { $('err-finish').textContent = 'Please write down what you think the rule is.'; return; }
+    if (!ruleText) { $('err-finish').textContent = "Please write down what you think Dr. Devil's rule is."; return; }
     if (!conf) { $('err-finish').textContent = 'Please say how sure you are.'; return; }
     $('submit').disabled = true;
     try {
@@ -289,7 +296,7 @@
 
   $('practice').addEventListener('click', () => {
     practice = true;
-    $('ledger').innerHTML = '';
+    seedLedger();
     $('verdict').className = 'verdict';
     $('verdict').textContent = '';
     $('ready').textContent = 'Back to results';
@@ -298,6 +305,7 @@
   });
 
   // Restore where the player left off.
+  seedLedger();
   for (const t of state.attempts) addRow(t.a, t.b, t.c, t.fits);
   if (state.stage === 'reveal') showReveal();
   else if (state.stage === 'done') showDone();
