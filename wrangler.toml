@@ -1,0 +1,21 @@
+name = "clim1001-246-game"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "clim1001-246-game"
+database_id = "REPLACE_WITH_THE_ID_PRINTED_BY_wrangler_d1_create"
+
+[vars]
+# Class stats are hidden until this many people have finished (protects anonymity in small cohorts).
+MIN_COHORT = "5"
+# Comma-separated list of rules from src/rules.js. One rule keeps stats comparable;
+# several reduce word-of-mouth leakage.
+RULE_POOL = "ascending"
+
+# Lets src/index.js import game.html as a string.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true

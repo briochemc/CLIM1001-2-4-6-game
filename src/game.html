@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guess my rule</title>
+<style>
+  :root {
+    --ink: #22303a;
+    --muted: #6b7a86;
+    --line: #d5dde3;
+    --panel: #eef2f5;
+    --yes: #2e7d5b;
+    --no: #b5443a;
+    --focus: #2b6cb0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 1.25rem 1rem 3rem;
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 34rem; margin: 0 auto; }
+  h1 { font: 600 1.5rem/1.2 Georgia, "Times New Roman", serif; margin: 0 0 .75rem; }
+  h2 { font: 600 1.1rem/1.3 Georgia, "Times New Roman", serif; margin: 1.75rem 0 .5rem; }
+  p { margin: 0 0 .9rem; }
+  .muted { color: var(--muted); }
+  section[hidden] { display: none; }
+
+  .triple { display: flex; gap: .5rem; align-items: center; margin: .75rem 0; }
+  .triple input {
+    width: 5.5rem; padding: .5rem .6rem; font: inherit; font-size: 1.15rem;
+    border: 1px solid var(--line); border-radius: 4px; text-align: center;
+  }
+  input:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button {
+    font: inherit; padding: .5rem .9rem; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--ink); background: var(--ink); color: #fff;
+  }
+  button.quiet { background: transparent; color: var(--ink); }
+  button:disabled { opacity: .5; cursor: default; }
+  .actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
+
+  .verdict {
+    font: 600 2.6rem/1.1 Georgia, "Times New Roman", serif;
+    min-height: 3rem; margin: .5rem 0 1rem;
+  }
+  .verdict.yes { color: var(--yes); }
+  .verdict.no { color: var(--no); }
+  .verdict small { display: block; font: 400 .95rem/1.4 system-ui, sans-serif; color: var(--muted); }
+
+  .ledger { background: var(--panel); border-radius: 6px; padding: .25rem 1rem; }
+  .ledger:empty { display: none; }
+  .ledger div { display: flex; justify-content: space-between; padding: .45rem 0; border-top: 1px solid var(--line); }
+  .ledger div:first-child { border-top: 0; }
+  .ledger .fits { color: var(--yes); }
+  .ledger .nofit { color: var(--no); }
+
+  textarea { width: 100%; min-height: 4.5rem; padding: .6rem; font: inherit; border: 1px solid var(--line); border-radius: 4px; }
+  fieldset { border: 0; padding: 0; margin: 1rem 0; }
+  legend { font-weight: 600; margin-bottom: .4rem; }
+  label { display: block; padding: .2rem 0; }
+  .error { color: var(--no); min-height: 1.4rem; }
+
+  .rule { font: 600 1.25rem/1.3 Georgia, serif; padding: 1rem; background: var(--panel); border-radius: 6px; margin: .75rem 0 1.25rem; }
+
+  table { border-collapse: collapse; margin: .75rem 0 1rem; width: 100%; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .verdict { transition: color .15s; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Guess my rule</h1>
+
+  <section id="playing">
+    <p>I have a rule in mind. It decides whether a set of three numbers fits or not. The set <strong>2, 4, 6</strong> fits.</p>
+    <p>Test any sets you like and I'll tell you whether each one fits. When you're confident you know the rule, write it down.</p>
+
+    <div class="triple">
+      <input id="a" type="number" inputmode="numeric" aria-label="First number">
+      <input id="b" type="number" inputmode="numeric" aria-label="Second number">
+      <input id="c" type="number" inputmode="numeric" aria-label="Third number">
+      <button id="test">Test this set</button>
+    </div>
+    <div class="error" id="err-attempt" aria-live="polite"></div>
+    <div class="verdict" id="verdict" aria-live="polite"></div>
+
+    <div class="ledger" id="ledger"></div>
+
+    <div class="actions">
+      <button id="ready" class="quiet">I know the rule</button>
+    </div>
+  </section>
+
+  <section id="stating" hidden>
+    <h2>What is the rule?</h2>
+    <textarea id="rule-text" placeholder="A set of three numbers fits when..."></textarea>
+    <fieldset>
+      <legend>How sure are you?</legend>
+      <label><input type="radio" name="conf" value="unsure"> Not sure, it's a guess</label>
+      <label><input type="radio" name="conf" value="fairly"> Fairly sure</label>
+      <label><input type="radio" name="conf" value="certain"> Certain</label>
+    </fieldset>
+    <div class="error" id="err-finish" aria-live="polite"></div>
+    <div class="actions">
+      <button id="submit">Submit my rule</button>
+      <button id="back" class="quiet">Test a few more sets first</button>
+    </div>
+  </section>
+
+  <section id="reveal" hidden>
+    <h2>The rule was</h2>
+    <div class="rule" id="rule-name"></div>
+    <p>You wrote: <em id="your-rule"></em></p>
+    <p><strong>Did your rule match?</strong></p>
+    <div class="error" id="err-verdict" aria-live="polite"></div>
+    <div class="actions">
+      <button data-verdict="same">Yes, the same rule</button>
+      <button data-verdict="partly" class="quiet">Partly</button>
+      <button data-verdict="different" class="quiet">No, a different rule</button>
+    </div>
+  </section>
+
+  <section id="done" hidden>
+    <h2>How you did</h2>
+    <p id="own-summary"></p>
+    <p id="own-note" class="muted"></p>
+
+    <h2>How the class did</h2>
+    <div id="stats"></div>
+
+    <div class="actions">
+      <button id="practice" class="quiet">Play again for fun (not counted)</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const TOKEN = "__TOKEN__";
+  const state = __STATE__;
+  let practice = false;
+  let noCount = state.n_no;
+  let attemptCount = state.attempts.length;
+
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => {
+    for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== id;
+  };
+
+  async function call(action, body) {
+    const res = await fetch('/api/' + action, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(() => ({ error: 'Unexpected reply from the server.' }));
+    if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+    return data;
+  }
+
+  function addRow(a, b, c, fits) {
+    const row = document.createElement('div');
+    row.innerHTML = `<span>${a}, ${b}, ${c}</span><span class="${fits ? 'fits' : 'nofit'}">${fits ? 'fits' : 'does not fit'}</span>`;
+    $('ledger').prepend(row);
+  }
+
+  function showVerdict(fits, extra) {
+    const v = $('verdict');
+    v.className = 'verdict ' + (fits ? 'yes' : 'no');
+    v.innerHTML = (fits ? 'Fits' : 'Does not fit') + (extra ? `<small>${extra}</small>` : '');
+  }
+
+  $('test').addEventListener('click', async () => {
+    const vals = ['a', 'b', 'c'].map((k) => $(k).value.trim());
+    $('err-attempt').textContent = '';
+    if (vals.some((v) => v === '')) { $('err-attempt').textContent = 'Please fill in all three numbers.'; return; }
+    $('test').disabled = true;
+    try {
+      const r = await call('attempt', { a: vals[0], b: vals[1], c: vals[2], practice });
+      addRow(vals[0], vals[1], vals[2], r.fits);
+      if (r.recorded) { attemptCount = r.n; if (!r.fits) noCount++; }
+      showVerdict(r.fits, practice ? 'practice, not counted' : '');
+      $('a').value = ''; $('b').value = ''; $('c').value = ''; $('a').focus();
+    } catch (e) {
+      $('err-attempt').textContent = e.message;
+    } finally {
+      $('test').disabled = false;
+    }
+  });
+
+  for (const k of ['a', 'b', 'c']) {
+    $(k).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('test').click(); });
+  }
+
+  $('ready').addEventListener('click', () => {
+    if (practice) { show('done'); return; }
+    show('stating');
+    $('rule-text').focus();
+  });
+  $('back').addEventListener('click', () => show('playing'));
+
+  $('submit').addEventListener('click', async () => {
+    const ruleText = $('rule-text').value.trim();
+    const conf = document.querySelector('input[name="conf"]:checked');
+    $('err-finish').textContent = '';
+    if (!ruleText) { $('err-finish').textContent = 'Please write down what you think the rule is.'; return; }
+    if (!conf) { $('err-finish').textContent = 'Please say how sure you are.'; return; }
+    $('submit').disabled = true;
+    try {
+      const r = await call('finish', { rule_text: ruleText, confidence: conf.value });
+      state.rule_text = ruleText;
+      state.confidence = conf.value;
+      state.rule_name = r.rule_name;
+      showReveal();
+    } catch (e) {
+      $('err-finish').textContent = e.message;
+    } finally {
+      $('submit').disabled = false;
+    }
+  });
+
+  function showReveal() {
+    $('rule-name').textContent = state.rule_name;
+    $('your-rule').textContent = state.rule_text;
+    show('reveal');
+  }
+
+  for (const btn of document.querySelectorAll('#reveal button[data-verdict]')) {
+    btn.addEventListener('click', async () => {
+      $('err-verdict').textContent = '';
+      try {
+        const r = await call('verdict', { verdict: btn.dataset.verdict });
+        state.verdict = btn.dataset.verdict;
+        state.stats = r.stats;
+        showDone();
+      } catch (e) {
+        $('err-verdict').textContent = e.message;
+      }
+    });
+  }
+
+  const CONF_LABEL = { unsure: 'not sure', fairly: 'fairly sure', certain: 'certain' };
+  const VERDICT_LABEL = { same: 'matched the rule', partly: 'partly matched the rule', different: 'was a different rule' };
+
+  function showDone() {
+    const sets = attemptCount === 1 ? '1 set' : `${attemptCount} sets`;
+    $('own-summary').textContent =
+      `You tested ${sets}, ${noCount} of which did not fit. You said you were ${CONF_LABEL[state.confidence]}, and your rule ${VERDICT_LABEL[state.verdict]}.`;
+    $('own-note').textContent = noCount === 0
+      ? 'Every set you tested fitted. A set that fits can never rule out an alternative hypothesis; only a set that does not fit can do that. This tendency to look for confirming evidence is what the game is about.'
+      : 'You tested at least one set that did not fit. Those are the tests that can actually rule out a wrong hypothesis.';
+    renderStats(state.stats);
+    show('done');
+  }
+
+  function pct(n, d) { return d ? Math.round((100 * n) / d) + '%' : '0%'; }
+
+  function renderStats(s) {
+    const el = $('stats');
+    if (!s || !s.available) {
+      el.innerHTML = `<p class="muted">Class results appear once at least ${s ? s.min_cohort : 5} people have finished. So far ${s ? s.completed : 0} have.</p>`;
+      return;
+    }
+    const c = s.counts;
+    const g = (k) => c[k] || 0;
+    const N = s.completed;
+    const avg = (g('attempts') / N).toFixed(1);
+    let html = `<p>${N} people have finished. On average they tested ${avg} sets before writing down a rule, and ${pct(g('got_a_no'), N)} tested at least one set that did not fit.</p>`;
+    html += '<table><tr><th>How sure they were</th><th>People</th><th>Same rule</th><th>Partly</th><th>Different</th></tr>';
+    for (const conf of ['certain', 'fairly', 'unsure']) {
+      const n = g('conf:' + conf);
+      html += `<tr><td>${CONF_LABEL[conf][0].toUpperCase() + CONF_LABEL[conf].slice(1)}</td><td class="num">${n}</td>`;
+      for (const v of ['same', 'partly', 'different']) html += `<td class="num">${pct(g(`conf:${conf}|verdict:${v}`), n)}</td>`;
+      html += '</tr>';
+    }
+    html += `<tr><th>Everyone</th><td class="num">${N}</td>`;
+    for (const v of ['same', 'partly', 'different']) html += `<td class="num">${pct(g('verdict:' + v), N)}</td>`;
+    html += '</tr></table>';
+    el.innerHTML = html;
+  }
+
+  $('practice').addEventListener('click', () => {
+    practice = true;
+    $('ledger').innerHTML = '';
+    $('verdict').className = 'verdict';
+    $('verdict').textContent = '';
+    $('ready').textContent = 'Back to results';
+    show('playing');
+    $('a').focus();
+  });
+
+  // Restore where the player left off.
+  for (const t of state.attempts) addRow(t.a, t.b, t.c, t.fits);
+  if (state.stage === 'reveal') showReveal();
+  else if (state.stage === 'done') showDone();
+  else show('playing');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "clim1001-2-4-6-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Wason's 2-4-6 rule-discovery game as an LTI tool for Moodle, on Cloudflare Workers + D1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute clim1001-246-game --local --file=schema.sql",
+    "db:remote": "wrangler d1 execute clim1001-246-game --remote --file=schema.sql",
+    "test-launch": "node scripts/test-launch.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

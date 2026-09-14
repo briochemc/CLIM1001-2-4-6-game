@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local development (never commit .dev.vars).
+# In production set these with: npx wrangler secret put NAME
+LTI_KEY=clim1001
+LTI_SECRET=change-me-to-a-long-random-string
+SESSION_SECRET=change-me-to-another-long-random-string
+PLAYER_SALT=change-me-to-a-third-long-random-string
