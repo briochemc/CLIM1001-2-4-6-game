@@ -5,7 +5,7 @@ compatibility_date = "2026-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "clim1001-246-game"
-database_id = "REPLACE_WITH_THE_ID_PRINTED_BY_wrangler_d1_create"
+database_id = "4e2a7b53-9689-4300-afb6-3b4030058e88"
 
 [vars]
 # Class stats are hidden until this many people have finished (protects anonymity in small cohorts).
