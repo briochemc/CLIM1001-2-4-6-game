@@ -129,6 +129,12 @@ The same tool can be added to any number of courses with the same key and secret
 course gets its own class statistics, because Moodle sends a different `context_id` per
 course.
 
+Moodle also sends the launcher's role. Anyone with a staff role in the course (teacher,
+non-editing teacher, manager) is recorded as an instructor: they can play, the page tells
+them so, but their session never enters the class statistics and the grading script skips
+it. So instructors can try the activity in the real course without polluting the numbers.
+Students are `Learner`; the role is stored in `sessions.role`.
+
 ## Day-to-day operations
 
 | Task | Command |

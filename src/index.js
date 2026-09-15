@@ -48,11 +48,12 @@ async function launch(request, env) {
 
   const pid = await playerId(userId, ctx, env.PLAYER_SALT);
   const rule = pickRule(env.RULE_POOL || 'ascending', pid);
+  const role = launchRole(form.get('roles'));
 
   await env.DB.prepare(
-    `INSERT INTO sessions (pid, ctx, rule, first_seen, launches) VALUES (?, ?, ?, ?, 1)
-     ON CONFLICT(pid) DO UPDATE SET launches = launches + 1`,
-  ).bind(pid, ctx, rule, now).run();
+    `INSERT INTO sessions (pid, ctx, role, rule, first_seen, launches) VALUES (?, ?, ?, ?, ?, 1)
+     ON CONFLICT(pid) DO UPDATE SET launches = launches + 1, role = excluded.role`,
+  ).bind(pid, ctx, role, rule, now).run();
 
   const token = await signToken({ pid, ctx, exp: now + TOKEN_TTL_SECONDS }, env.SESSION_SECRET);
   const state = await playerState(env, pid);
@@ -63,6 +64,12 @@ async function launch(request, env) {
   return new Response(page, {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   });
+}
+
+// Moodle sends roles such as "Instructor", "Learner" or "urn:lti:role:ims/lis/Instructor",
+// comma separated when there are several. Anyone with a staff role is an instructor here.
+function launchRole(roles) {
+  return /instructor|teachingassistant|contentdeveloper|administrator|mentor|manager/i.test(roles || '') ? 'instructor' : 'learner';
 }
 
 /* ---------- Game API ---------- */
@@ -176,6 +183,7 @@ async function playerState(env, pid) {
     confidence: session.confidence,
     verdict: session.verdict, // as checked; null while waiting for a person
     self_verdict: session.self_verdict,
+    role: session.role,
   };
   if (state.stage === 'done') state.stats = await cohortStats(env, session.ctx, session.rule);
   return state;
@@ -208,6 +216,7 @@ async function devLauncher(url, env) {
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const userId = url.searchParams.get('user');
   const ctx = url.searchParams.get('ctx') || 'course-A';
+  const roles = url.searchParams.get('instructor') ? 'Instructor' : 'Learner';
 
   if (!userId) {
     return html(`<!doctype html><meta charset="utf-8"><title>Dev launcher</title>
@@ -216,13 +225,14 @@ async function devLauncher(url, env) {
 <form>
   <p><label>User id <input name="user" value="alice" required></label></p>
   <p><label>Course id <input name="ctx" value="${esc(ctx)}"></label></p>
+  <p><label><input type="checkbox" name="instructor" value="1"> Launch as an instructor (plays, but is not counted)</label></p>
   <p><button>Launch the game</button></p>
 </form>
 <p style="color:#666">Same user id + course id = same player, so reopening resumes where they left off.</p>`);
   }
 
   const launchUrl = `${url.origin}/launch`;
-  const fields = await signedLaunch(launchUrl, { userId, ctx, consumerKey: env.LTI_KEY, secret: env.LTI_SECRET });
+  const fields = await signedLaunch(launchUrl, { userId, ctx, roles, consumerKey: env.LTI_KEY, secret: env.LTI_SECRET });
   const inputs = Object.entries(fields)
     .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
     .join('\n');

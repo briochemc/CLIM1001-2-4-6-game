@@ -10,8 +10,10 @@
 //   verdict:V|tests:K|no           how many of those sets did not fit, summed
 //
 // Only checked sessions feed the charts, so every chart is over the same people.
+// Instructors trying the game contribute nothing.
 
 export function tallyRows(session) {
+  if (session.role === 'instructor') return [];
   const rows = [['finished', 1]];
   const v = session.verdict;
   if (!v) return rows;

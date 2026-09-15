@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS sessions (
   pid        TEXT PRIMARY KEY,          -- opaque player id (HMAC of course + Moodle user_id)
   ctx        TEXT NOT NULL,             -- Moodle context_id (the course)
+  role       TEXT NOT NULL DEFAULT 'learner', -- learner | instructor (instructors never count in the class stats)
   rule       TEXT NOT NULL,             -- which hidden rule this player was assigned
   first_seen INTEGER NOT NULL,          -- unix seconds
   launches   INTEGER NOT NULL DEFAULT 1,
@@ -17,6 +18,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   n_attempts INTEGER NOT NULL DEFAULT 0,
   n_no       INTEGER NOT NULL DEFAULT 0 -- how many tested sets did not fit
 );
+
+-- Added after the first deployment; harmless if the column already exists (the error is
+-- "duplicate column name", which wrangler reports but which changes nothing).
+-- ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT 'learner';
 
 CREATE TABLE IF NOT EXISTS attempts (
   id   INTEGER PRIMARY KEY AUTOINCREMENT,

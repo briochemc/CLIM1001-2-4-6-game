@@ -114,6 +114,7 @@
   <section id="playing">
     <p>Dr. Devil has a rule in mind. It decides whether a set of three numbers fits or not. The set <strong>2, 4, 6</strong> fits.</p>
     <p>Test any sets you like and Dr. Devil will tell you whether each one fits. When you're confident you know the rule, write it down.</p>
+    <p id="role-note" class="muted" hidden>You are an instructor in this course, so your game is recorded but not counted in the class results.</p>
 
     <div class="triple">
       <input id="a" type="number" inputmode="numeric" aria-label="First number">
@@ -416,11 +417,13 @@ window.charts = (() => {
   }
 
   function showDone() {
-    $('own-status').textContent = state.verdict === 'same'
-      ? 'Your rule has been checked: it is the same as Dr. Devil\'s.'
-      : state.verdict === 'different'
-        ? 'Your rule has been checked: it is not the same as Dr. Devil\'s.'
-        : 'Your rule is waiting to be checked by a real person. Come back later to see the result.';
+    $('own-status').textContent = state.role === 'instructor'
+      ? 'You opened this as an instructor, so your game is not counted in the class results below.'
+      : state.verdict === 'same'
+        ? 'Your rule has been checked: it is the same as Dr. Devil\'s.'
+        : state.verdict === 'different'
+          ? 'Your rule has been checked: it is not the same as Dr. Devil\'s.'
+          : 'Your rule is waiting to be checked by a real person. Come back later to see the result.';
     renderStats(state.stats);
     show('done');
   }
@@ -491,6 +494,7 @@ window.charts = (() => {
   });
 
   // Restore where the player left off.
+  $('role-note').hidden = state.role !== 'instructor';
   seedLedger();
   for (const t of state.attempts) addRow(t.a, t.b, t.c, t.fits);
   if (state.stage === 'reveal') showReveal();
