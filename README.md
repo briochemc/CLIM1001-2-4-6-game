@@ -29,9 +29,12 @@ result and the class stats, with an explicitly labelled practice mode that recor
 A player is identified by the hash of course and user together, so someone enrolled in two
 courses that both use the tool gets a separate game, and a separate count, in each.
 
-## Setup
+## Setup, once
 
-You need Node.js 18 or newer and a free Cloudflare account.
+You need Node.js 18 or newer and a free Cloudflare account. This has already been done for
+the current deployment; it is written down so it can be redone from scratch.
+
+### 1. Log in and create the database
 
 ```sh
 npm install
@@ -39,29 +42,105 @@ npx wrangler login                 # opens a browser once
 npx wrangler d1 create clim1001-246-game
 ```
 
-Copy the `database_id` that the last command prints into `wrangler.toml`, then:
+The last command prints a `database_id`. Put it in `wrangler.toml` in place of the
+placeholder. If you lose it, `npx wrangler d1 list` shows it again. Until this is done every
+`--remote` command fails with "Invalid uuid".
+
+### 2. Create the tables
 
 ```sh
-npm run db:remote                  # creates the tables
-npx wrangler secret put LTI_KEY        # e.g. clim1001
-npx wrangler secret put LTI_SECRET     # a long random string; also goes in Moodle
-npx wrangler secret put SESSION_SECRET # a long random string
-npx wrangler secret put PLAYER_SALT    # a long random string
+npm run db:remote
+```
+
+This runs `schema.sql` against the remote database. It is safe to rerun: every statement is
+`CREATE ... IF NOT EXISTS`. It asks for confirmation; add `-- --yes` to skip the prompt.
+
+### 3. Set the secrets
+
+The worker needs four secrets. Cloudflare stores them but never shows them again, so keep
+your own copy of the two that Moodle also needs.
+
+| Secret | What it is | Who else needs it |
+|---|---|---|
+| `LTI_KEY` | The consumer key, a short name such as `clim1001` | Moodle |
+| `LTI_SECRET` | A long random string that signs every launch | Moodle |
+| `SESSION_SECRET` | A long random string that signs the page's session token | nobody |
+| `PLAYER_SALT` | A long random string that hashes Moodle user ids | nobody |
+
+Set each one with `npx wrangler secret put NAME`, which prompts for the value, or pipe it in:
+
+```sh
+printf '%s' clim1001 | npx wrangler secret put LTI_KEY
+openssl rand -base64 32 | tr -d '/+=' | npx wrangler secret put LTI_SECRET
+openssl rand -base64 48 | npx wrangler secret put SESSION_SECRET
+openssl rand -base64 48 | npx wrangler secret put PLAYER_SALT
+```
+
+Write the key and the LTI secret down somewhere safe before piping them away. For the
+current deployment they are in `.wrangler/moodle-secrets.txt`, which git ignores.
+
+Changing `PLAYER_SALT` later breaks the link between existing sessions and returning
+players, who would then start a fresh game. Changing `LTI_SECRET` requires updating Moodle.
+The other two can be rotated freely.
+
+### 4. Register a workers.dev subdomain and deploy
+
+```sh
 npm run deploy
 ```
 
-`deploy` prints the tool's address, something like `https://clim1001-246-game.<you>.workers.dev`.
-Generate the random strings with `openssl rand -base64 32` or similar.
+The first time, wrangler asks to register a *workers.dev subdomain* for the account. Say yes
+and pick a name. This name is per Cloudflare account, not per project: every worker you ever
+deploy gets an address of the form `<worker-name>.<subdomain>.workers.dev`, so a general name
+such as your username is right. The project-specific part is the worker name,
+`clim1001-246-game` from `wrangler.toml`. The same choice can be made in the dashboard under
+Workers & Pages, Overview.
+
+`deploy` ends by printing the tool address, something like
+`https://clim1001-246-game.<subdomain>.workers.dev`. Every later code change is published
+with the same command, in a few seconds, with no downtime.
+
+### 5. Check the live worker before involving Moodle
+
+Opening the address in a browser shows a one-line landing text; `/dev` gives "Not found",
+because the dev launcher only exists locally. A signed launch can be sent from the terminal:
+
+```sh
+TOOL_URL=https://clim1001-246-game.<subdomain>.workers.dev/launch \
+LTI_KEY=clim1001 LTI_SECRET=<the shared secret> \
+npm run test-launch -- someone
+```
+
+`HTTP 200` followed by the page's HTML means signing, the database, and the secrets all
+agree. This leaves one session in a course called `course-A`; delete it with the cleanup
+query under *Looking at the data*, or ignore it, since real courses have other ids.
 
 ## Moodle configuration
 
 In the course, add an activity of type **External tool**:
 
-- Tool URL: `https://clim1001-246-game.<you>.workers.dev/launch`
-- Click **Show more...**: Consumer key = the `LTI_KEY` you set, Shared secret = the `LTI_SECRET`
+- Tool URL: `https://clim1001-246-game.<subdomain>.workers.dev/launch`
+- Click **Show more...**: Consumer key = `LTI_KEY`, Shared secret = `LTI_SECRET`
 - Launch container: **Embed, without blocks**
 - Privacy: leave *Share launcher's name* and *Share launcher's email* unticked
 - Grade: no grade needed; the tool never sends grades back
+
+The same tool can be added to any number of courses with the same key and secret. Each
+course gets its own class statistics, because Moodle sends a different `context_id` per
+course.
+
+## Day-to-day operations
+
+| Task | Command |
+|---|---|
+| Publish a code change | `npm run deploy` |
+| Grade the rules students wrote | `npm run grade` (see below) |
+| See how many finished, per course | `npx wrangler d1 execute clim1001-246-game --remote --command "SELECT ctx, COUNT(*), SUM(verdict IS NOT NULL) AS checked FROM sessions WHERE finished IS NOT NULL GROUP BY ctx"` |
+| Remove one course's data | see *Looking at the data* |
+| Rotate the Moodle secret | `npx wrangler secret put LTI_SECRET`, then update every Moodle activity |
+
+Class stats stay hidden until `MIN_COHORT` checked answers exist in a course, so the first
+few students in each course see "results appear once ..." rather than a chart.
 
 ## Local development
 
@@ -147,6 +226,22 @@ npx wrangler d1 execute clim1001-246-game --remote --command \
 
 The `attempts` table holds every set each player tested, in order, if you want to look at
 strategies in more detail. Export with `--command "SELECT * FROM attempts" --json`.
+
+Player ids are salted hashes, so the course id (`ctx`) is the only readable handle on the
+data. To remove one course entirely, for instance after testing against the live worker,
+delete from all three tables, then let the next `npm run grade` rebuild the tally:
+
+```sh
+npx wrangler d1 execute clim1001-246-game --remote --command \
+  "DELETE FROM attempts WHERE pid IN (SELECT pid FROM sessions WHERE ctx = 'course-A');
+   DELETE FROM sessions WHERE ctx = 'course-A';
+   DELETE FROM tally WHERE ctx = 'course-A'"
+```
+
+When trying things against the live worker, use a course id that starts with `test-` so a
+single `WHERE ctx LIKE 'test-%'` finds everything to remove later. Normal development does
+not need this: `npm run dev` uses a local copy of the database that never touches the real
+one.
 
 ## Free-tier headroom
 
