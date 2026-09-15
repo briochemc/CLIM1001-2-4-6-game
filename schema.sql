@@ -2,7 +2,7 @@
 -- (use --local instead of --remote for the local dev database)
 
 CREATE TABLE IF NOT EXISTS sessions (
-  pid        TEXT PRIMARY KEY,          -- opaque player id (HMAC of Moodle user_id)
+  pid        TEXT PRIMARY KEY,          -- opaque player id (HMAC of course + Moodle user_id)
   ctx        TEXT NOT NULL,             -- Moodle context_id (the course)
   rule       TEXT NOT NULL,             -- which hidden rule this player was assigned
   first_seen INTEGER NOT NULL,          -- unix seconds

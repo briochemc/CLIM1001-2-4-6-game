@@ -73,9 +73,12 @@ export async function verifyLtiLaunch(requestUrl, form, consumerKey, secret) {
   return { ok: true };
 }
 
-/** Derive an opaque player id from Moodle's user_id so the database can't be joined back to Moodle. */
-export async function playerId(userId, salt) {
-  return toHex(await hmac('SHA-256', salt, userId)).slice(0, 32);
+/**
+ * Derive an opaque player id from Moodle's user_id and the course (context_id), so the
+ * database can't be joined back to Moodle and the same person gets a fresh game in each course.
+ */
+export async function playerId(userId, ctx, salt) {
+  return toHex(await hmac('SHA-256', salt, `${ctx}\n${userId}`)).slice(0, 32);
 }
 
 /** Create a signed, expiring token carried by the game page instead of a cookie. */

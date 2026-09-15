@@ -42,7 +42,7 @@ async function launch(request, env) {
   const ctx = form.get('context_id') || 'default';
   if (!userId) return text('Launch rejected: Moodle did not send a user id.', 403);
 
-  const pid = await playerId(userId, env.PLAYER_SALT);
+  const pid = await playerId(userId, ctx, env.PLAYER_SALT);
   const rule = pickRule(env.RULE_POOL || 'ascending', pid);
 
   await env.DB.prepare(

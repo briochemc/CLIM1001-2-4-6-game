@@ -24,8 +24,10 @@ The game page calls `/api/attempt`, `/api/finish`, `/api/verdict` and `/api/stat
 token in an `Authorization` header. No cookies are used, so it works inside the Moodle iframe
 in every browser.
 
-Only a player's first completed session is counted. Later launches show their result and the
-class stats, with an explicitly labelled practice mode that records nothing.
+Only a player's first completed session in a course is counted. Later launches show their
+result and the class stats, with an explicitly labelled practice mode that records nothing.
+A player is identified by the hash of course and user together, so someone enrolled in two
+courses that both use the tool gets a separate game, and a separate count, in each.
 
 ## Setup
 
