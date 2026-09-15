@@ -89,15 +89,15 @@ The other two can be rotated freely.
 npm run deploy
 ```
 
-The first time, wrangler asks to register a *workers.dev subdomain* for the account. Say yes
-and pick a name. This name is per Cloudflare account, not per project: every worker you ever
-deploy gets an address of the form `<worker-name>.<subdomain>.workers.dev`, so a general name
-such as your username is right. The project-specific part is the worker name,
+The first time, wrangler asks to register a *workers.dev subdomain* for the account. This
+name is per Cloudflare account, not per project: every worker deployed on the account gets
+an address of the form `<worker-name>.<subdomain>.workers.dev`, so a general name is right.
+The subdomain for this account is `briochemc`; the project-specific part is the worker name,
 `clim1001-246-game` from `wrangler.toml`. The same choice can be made in the dashboard under
 Workers & Pages, Overview.
 
-`deploy` ends by printing the tool address, something like
-`https://clim1001-246-game.<subdomain>.workers.dev`. Every later code change is published
+`deploy` ends by printing the tool address, which for this deployment is
+`https://clim1001-246-game.briochemc.workers.dev`. Every later code change is published
 with the same command, in a few seconds, with no downtime.
 
 ### 5. Check the live worker before involving Moodle
@@ -106,7 +106,7 @@ Opening the address in a browser shows a one-line landing text; `/dev` gives "No
 because the dev launcher only exists locally. A signed launch can be sent from the terminal:
 
 ```sh
-TOOL_URL=https://clim1001-246-game.<subdomain>.workers.dev/launch \
+TOOL_URL=https://clim1001-246-game.briochemc.workers.dev/launch \
 LTI_KEY=clim1001 LTI_SECRET=<the shared secret> \
 npm run test-launch -- someone
 ```
@@ -119,7 +119,7 @@ query under *Looking at the data*, or ignore it, since real courses have other i
 
 In the course, add an activity of type **External tool**:
 
-- Tool URL: `https://clim1001-246-game.<subdomain>.workers.dev/launch`
+- Tool URL: `https://clim1001-246-game.briochemc.workers.dev/launch`
 - Click **Show more...**: Consumer key = `LTI_KEY`, Shared secret = `LTI_SECRET`
 - Launch container: **Embed, without blocks**
 - Privacy: leave *Share launcher's name* and *Share launcher's email* unticked
