@@ -131,9 +131,12 @@ course.
 
 Moodle also sends the launcher's role. Anyone with a staff role in the course (teacher,
 non-editing teacher, manager) is recorded as an instructor: they can play, the page tells
-them so, but their session never enters the class statistics and the grading script skips
-it. So instructors can try the activity in the real course without polluting the numbers.
-Students are `Learner`; the role is stored in `sessions.role`.
+them so, and their session is counted separately from the students'. Students only ever
+see student numbers. Instructors see the same by default, with a switch above the charts
+to show staff only or everyone, and they see the charts even before the course has reached
+`MIN_COHORT` checked answers. So instructors can try the activity in the real course
+without polluting the numbers. The role is stored in `sessions.role`; staff counts live in
+the tally under keys prefixed `staff|`.
 
 ## Day-to-day operations
 

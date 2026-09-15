@@ -95,7 +95,8 @@
   .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .4rem 0 0; padding: 0; list-style: none; font-size: .9rem; }
   .legend li { display: flex; align-items: center; gap: .4rem; }
   .legend i { width: .8rem; height: .8rem; border-radius: 3px; display: inline-block; }
-  #focus-note { min-height: 1.4rem; }
+  .who { display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: center; color: var(--muted); }
+  .who label { display: inline-flex; align-items: center; gap: .3rem; padding: 0; color: var(--ink); }
 
   table { border-collapse: collapse; margin: .75rem 0 1rem; width: 100%; }
   th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
@@ -434,10 +435,34 @@ window.charts = (() => {
       el.innerHTML = `<p class="muted">Class results appear once at least ${s ? s.min_cohort : 5} answers have been checked. So far ${s ? s.graded : 0} of ${s ? s.finished : 0} have.</p>`;
       return;
     }
-    const c = s.counts;
+
+    // Instructors get the staff numbers too, and a switch between students, staff and
+    // everyone. Students never receive staff numbers, so they never see the switch.
+    let html = '';
+    let views = null;
+    if (s.staff) {
+      const all = { graded: s.graded + s.staff.graded, finished: s.finished + s.staff.finished, counts: { ...s.counts } };
+      for (const [k, n] of Object.entries(s.staff.counts)) all.counts[k] = (all.counts[k] || 0) + n;
+      views = { students: s, staff: s.staff, all };
+      html += `<p class="who" role="radiogroup" aria-label="Whose results to show">Show results for
+        <label><input type="radio" name="who" value="students" checked> students (${s.finished})</label>
+        <label><input type="radio" name="who" value="staff"> staff (${s.staff.finished})</label>
+        <label><input type="radio" name="who" value="all"> everyone</label></p>`;
+    }
+    html += '<div id="charts-host"></div>';
+    el.innerHTML = html;
+
+    renderCharts(s);
+    if (views) {
+      for (const r of el.querySelectorAll('input[name="who"]')) r.addEventListener('change', () => renderCharts(views[r.value]));
+    }
+  }
+
+  function renderCharts(s) {
+    const c = s.counts || {};
     const g = (k) => c[k] || 0;
 
-    el.innerHTML = `<div class="charts">
+    $('charts-host').innerHTML = `<div class="charts">
       <figure class="fig-pie"><figcaption>How many found the rule?<small>Checked so far: ${s.graded} of the ${s.finished} who finished. Select a slice to see just that group in the other charts.</small></figcaption><div id="pie"></div></figure>
       <figure class="fig-conf"><figcaption>How sure were they?</figcaption><div id="conf-chart"></div></figure>
       <figure class="fig-tests"><figcaption>How many tests?</figcaption><div id="tests-chart"></div></figure>

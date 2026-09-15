@@ -91,7 +91,7 @@ async function api(request, env, action) {
     case 'verdict':
       return verdict(env, session, body);
     case 'stats':
-      return json({ stats: await cohortStats(env, session.ctx, session.rule) });
+      return json({ stats: await cohortStats(env, session) });
     default:
       return json({ error: 'Unknown action' }, 404);
   }
@@ -165,7 +165,7 @@ async function verdict(env, session, body) {
   if (!SELF_VERDICT.has(v)) return json({ error: 'Please choose an answer.' }, 400);
 
   await env.DB.prepare('UPDATE sessions SET self_verdict = ? WHERE pid = ?').bind(v, session.pid).run();
-  return json({ stats: await cohortStats(env, session.ctx, session.rule) });
+  return json({ stats: await cohortStats(env, session) });
 }
 
 /* ---------- Helpers ---------- */
@@ -185,19 +185,32 @@ async function playerState(env, pid) {
     self_verdict: session.self_verdict,
     role: session.role,
   };
-  if (state.stage === 'done') state.stats = await cohortStats(env, session.ctx, session.rule);
+  if (state.stage === 'done') state.stats = await cohortStats(env, session);
   return state;
 }
 
-// Class stats are over checked sessions only. `finished` says how many are waiting.
-async function cohortStats(env, ctx, rule) {
+// Class stats are over checked student sessions only. `finished` says how many are
+// waiting. Students see nothing until MIN_COHORT answers are checked. Instructors
+// additionally get the staff counts, always, so they can view students, staff or both.
+async function cohortStats(env, session) {
   const min = Number(env.MIN_COHORT || 5);
-  const { results } = await env.DB.prepare('SELECT key, n FROM tally WHERE ctx = ? AND rule = ?').bind(ctx, rule).all();
-  const t = Object.fromEntries(results.map((r) => [r.key, r.n]));
-  const graded = t.graded || 0;
-  const finished = t.finished || 0;
-  if (graded < min) return { graded, finished, min_cohort: min, available: false };
-  return { graded, finished, min_cohort: min, available: true, counts: t };
+  const { results } = await env.DB.prepare('SELECT key, n FROM tally WHERE ctx = ? AND rule = ?').bind(session.ctx, session.rule).all();
+  const students = {};
+  const staff = {};
+  for (const r of results) {
+    if (r.key.startsWith('staff|')) staff[r.key.slice(6)] = r.n;
+    else students[r.key] = r.n;
+  }
+  const graded = students.graded || 0;
+  const finished = students.finished || 0;
+  const out = { graded, finished, min_cohort: min, available: graded >= min };
+  if (out.available) out.counts = students;
+  if (session.role === 'instructor') {
+    out.available = true;
+    out.counts = students;
+    out.staff = { graded: staff.graded || 0, finished: staff.finished || 0, counts: staff };
+  }
+  return out;
 }
 
 function landing() {
