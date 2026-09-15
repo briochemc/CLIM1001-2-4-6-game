@@ -53,24 +53,53 @@ export async function verifyLtiLaunch(requestUrl, form, consumerKey, secret) {
   const ts = Number(form.get('oauth_timestamp'));
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return { ok: false, reason: 'timestamp out of range' };
 
-  const url = new URL(requestUrl);
-  const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
-
   const pairs = [];
   for (const [k, v] of form.entries()) {
     if (k === 'oauth_signature') continue;
-    pairs.push([percentEncode(k), percentEncode(String(v))]);
+    pairs.push([k, String(v)]);
   }
-  for (const [k, v] of url.searchParams.entries()) pairs.push([percentEncode(k), percentEncode(v)]);
-  pairs.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
-
-  const normalized = pairs.map(([k, v]) => `${k}=${v}`).join('&');
-  const baseString = ['POST', percentEncode(baseUrl), percentEncode(normalized)].join('&');
-  const signingKey = percentEncode(secret) + '&';
-  const expected = toBase64(await hmac('SHA-1', signingKey, baseString));
+  const expected = await ltiSignature(requestUrl, pairs, secret);
 
   if (!timingSafeEqual(expected, form.get('oauth_signature') || '')) return { ok: false, reason: 'bad signature' };
   return { ok: true };
+}
+
+/**
+ * OAuth 1.0a HMAC-SHA1 signature for a POST of `pairs` ([name, value]) to `launchUrl`.
+ * Query parameters in the URL are part of the signature, as the spec requires.
+ */
+export async function ltiSignature(launchUrl, pairs, secret) {
+  const url = new URL(launchUrl);
+  const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
+  const all = pairs.map(([k, v]) => [percentEncode(k), percentEncode(v)]);
+  for (const [k, v] of url.searchParams.entries()) all.push([percentEncode(k), percentEncode(v)]);
+  all.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
+
+  const normalized = all.map(([k, v]) => `${k}=${v}`).join('&');
+  const baseString = ['POST', percentEncode(baseUrl), percentEncode(normalized)].join('&');
+  return toBase64(await hmac('SHA-1', percentEncode(secret) + '&', baseString));
+}
+
+/**
+ * Build the form fields Moodle would send to launch the tool for one user. Used by the
+ * local dev launcher and the scripts; Moodle itself does this on the real site.
+ */
+export async function signedLaunch(launchUrl, { userId, ctx, consumerKey, secret }) {
+  const fields = {
+    lti_message_type: 'basic-lti-launch-request',
+    lti_version: 'LTI-1p0',
+    resource_link_id: 'rl-1',
+    user_id: userId,
+    roles: 'Learner',
+    context_id: ctx,
+    oauth_consumer_key: consumerKey,
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: String(Math.floor(Date.now() / 1000)),
+    oauth_nonce: toHex(crypto.getRandomValues(new Uint8Array(8))),
+    oauth_version: '1.0',
+  };
+  fields.oauth_signature = await ltiSignature(launchUrl, Object.entries(fields), secret);
+  return fields;
 }
 
 /**

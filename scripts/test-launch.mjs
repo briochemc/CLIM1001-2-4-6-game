@@ -5,57 +5,15 @@
 //
 // Prints the HTML the game would return, or the rejection reason.
 // Reads LTI_KEY and LTI_SECRET from .dev.vars so the signature matches wrangler dev.
+// Set CONTEXT_ID to pretend the launch comes from a different course.
 
-import { createHmac, randomBytes } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
+import { launch, config } from './lti.mjs';
 
+const { toolUrl, key, secret } = config();
 const userId = process.argv[2] || 'test-user-1';
-const toolUrl = process.env.TOOL_URL || 'http://localhost:8787/launch';
+const ctx = process.env.CONTEXT_ID || 'course-A';
 
-const vars = {};
-if (existsSync('.dev.vars')) {
-  for (const line of readFileSync('.dev.vars', 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/);
-    if (m) vars[m[1]] = m[2];
-  }
-}
-const key = process.env.LTI_KEY || vars.LTI_KEY;
-const secret = process.env.LTI_SECRET || vars.LTI_SECRET;
-if (!key || !secret) {
-  console.error('Set LTI_KEY and LTI_SECRET in .dev.vars (copy .dev.vars.example) or in the environment.');
-  process.exit(1);
-}
-
-const pe = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
-
-const params = {
-  lti_message_type: 'basic-lti-launch-request',
-  lti_version: 'LTI-1p0',
-  resource_link_id: 'rl-1',
-  user_id: userId,
-  roles: 'Learner',
-  context_id: process.env.CONTEXT_ID || 'course-42',
-  oauth_consumer_key: key,
-  oauth_signature_method: 'HMAC-SHA1',
-  oauth_timestamp: String(Math.floor(Date.now() / 1000)),
-  oauth_nonce: randomBytes(8).toString('hex'),
-  oauth_version: '1.0',
-};
-
-const url = new URL(toolUrl);
-const baseUrl = `${url.protocol}//${url.host}${url.pathname}`;
-const normalized = Object.entries(params)
-  .map(([k, v]) => [pe(k), pe(v)])
-  .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : 1))
-  .map(([k, v]) => `${k}=${v}`)
-  .join('&');
-const base = ['POST', pe(baseUrl), pe(normalized)].join('&');
-params.oauth_signature = createHmac('sha1', pe(secret) + '&').update(base).digest('base64');
-
-const res = await fetch(toolUrl, {
-  method: 'POST',
-  headers: { 'content-type': 'application/x-www-form-urlencoded' },
-  body: new URLSearchParams(params),
-});
+const res = await launch(toolUrl, { userId, ctx, consumerKey: key, secret });
 console.log(`HTTP ${res.status}`);
-const body = await res.text(); console.log(process.env.FULL ? body : body.slice(0, 600));
+const body = await res.text();
+console.log(process.env.FULL ? body : body.slice(0, 600));

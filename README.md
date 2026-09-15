@@ -71,15 +71,31 @@ npm run db:local
 npm run dev                        # tool runs at http://localhost:8787
 ```
 
-In a second terminal, simulate Moodle launching the tool for a fake user:
+This uses a local copy of the database under `.wrangler/state/`; the real one on Cloudflare
+is never touched. `npm run db:reset-local` wipes it and starts again.
+
+To play in a browser, open <http://localhost:8787/dev>, type any user id and course id, and
+you are launched into the game as that student, exactly as Moodle would do it. The same
+user id and course id resume the same player. The page only exists when `DEV_LAUNCHER=1` is
+set in `.dev.vars`, so it is never reachable in production.
+
+Class stats stay hidden until `MIN_COHORT` students have finished, so to see them, let a
+class of fake students play first:
 
 ```sh
-npm run test-launch -- alice
+npm run seed -- course-A 12        # course id, number of students
 ```
 
-To play the game in a browser during development, save the HTML that the script prints
-(`FULL=1 npm run test-launch -- alice > /tmp/game.html`) and open it. The page talks to the
-dev server at `/api/...`, so serve it from the same origin or just test the API directly.
+Then launch yourself into `course-A` from the dev page, finish the game, and the results of
+the twelve seeded students appear below yours. Seed a second course to check that the two
+are kept apart. The seed script prints the raw stats it gets back from the API.
+
+From the command line, `npm run test-launch -- alice` performs one launch and prints the
+start of the page (`CONTEXT_ID=course-B` picks the course, `FULL=1` prints everything).
+
+`npm run check-charts` renders the class-result charts with made-up numbers, including
+edge cases, into `.wrangler/charts-preview.html`, so a change to them can be eyeballed
+without playing through the game.
 
 ## Configuration
 
@@ -91,11 +107,42 @@ dev server at `/api/...`, so serve it from the same origin or just test the API 
   With one rule everyone plays the same game and the stats are directly comparable. With
   several, each player is deterministically assigned one, which limits word-of-mouth leakage.
 
+## Checking the rules students write
+
+Whether a student's rule matches is decided by a person, not by the student. When a
+student submits a rule, the worker first tries the patterns in `src/rule-patterns.js`:
+phrasings of the real rule ("increasing", "each bigger than the last", "a < b < c") and
+the classic stricter rules ("even", "by two", "same interval", "positive"). A recognised
+answer is graded on the spot and the class charts include it immediately. Anything else
+waits for you. Students also say what they think of their own rule, but that is optional,
+kept separately, and never shown as a result.
+
+Once a day, or whenever you like:
+
+```sh
+npm run grade
+```
+
+This re-runs the patterns over every finished session (so a pattern you added today also
+grades last week's answers), lists what still matches nothing, and asks you to grade each
+one: `s` for the same rule, `d` for a different rule, Enter to leave it for later. It then
+writes the verdicts back and rebuilds the class tally. `npm run grade -- --list` only
+reports; `--show-auto` also prints every pattern-graded answer so you can spot mistakes;
+`--local` targets the local dev database.
+
+When several hand-graded answers say the same thing, add a pattern for it to
+`src/rule-patterns.js`, add the wording to `scripts/check-patterns.mjs`, run
+`npm run check-patterns`, commit, and `npm run deploy` so new students get the instant
+result too. The pattern file in git is the record of every grading decision.
+
+The class charts are always over checked answers only, and the page says "checked so far:
+41 of 58" so students know why theirs may not be in yet.
+
 ## Looking at the data
 
 ```sh
 npx wrangler d1 execute clim1001-246-game --remote --command \
-  "SELECT confidence, verdict, COUNT(*) FROM sessions WHERE verdict IS NOT NULL GROUP BY 1, 2"
+  "SELECT ctx, verdict, self_verdict, COUNT(*) FROM sessions WHERE finished IS NOT NULL GROUP BY 1, 2, 3"
 ```
 
 The `attempts` table holds every set each player tested, in order, if you want to look at

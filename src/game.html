@@ -65,6 +65,38 @@
 
   .rule { font: 600 1.25rem/1.3 Georgia, serif; padding: 1rem; background: var(--panel); border-radius: 6px; margin: .75rem 0 1.25rem; }
 
+  /* Class result charts */
+  /* Pie fills a 3x3 block on the left; the confidence bars sit top right and the
+     tests histogram takes the two rows beneath them. Narrow screens stack them. */
+  .charts {
+    display: grid; gap: 1rem 1.25rem; margin: 1rem 0;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-areas: "pie h1" "pie h2" "pie h2";
+  }
+  .charts .fig-pie { grid-area: pie; }
+  .charts .fig-conf { grid-area: h1; }
+  .charts .fig-tests { grid-area: h2; }
+  @media (max-width: 30rem) {
+    .charts { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pie" "h1" "h2"; }
+  }
+  .charts figure { margin: 0; min-width: 0; }
+  .charts .pie { max-width: 18rem; margin: 0 auto; }
+  .charts figcaption { font-weight: 600; margin-bottom: .35rem; }
+  .charts figcaption small { display: block; font-weight: 400; color: var(--muted); }
+  .charts svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .charts .lab { font: 12px system-ui, sans-serif; fill: var(--ink); pointer-events: none; }
+  .charts .lab.on { fill: #fff; font-weight: 600; }
+  .charts .lab.muted { fill: var(--muted); }
+  .charts .axis { stroke: var(--line); stroke-width: 1; }
+  .charts .slice { cursor: pointer; transition: opacity .15s; }
+  .charts .slice:focus-visible { outline: none; }
+  .charts .pie.has-focus .slice:not(.focus) { opacity: .35; }
+  .charts .slice.focus { stroke: var(--ink); stroke-width: 2; }
+  .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .4rem 0 0; padding: 0; list-style: none; font-size: .9rem; }
+  .legend li { display: flex; align-items: center; gap: .4rem; }
+  .legend i { width: .8rem; height: .8rem; border-radius: 3px; display: inline-block; }
+  #focus-note { min-height: 1.4rem; }
+
   table { border-collapse: collapse; margin: .75rem 0 1rem; width: 100%; }
   th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
   th { font-weight: 600; }
@@ -119,21 +151,18 @@
     <h2>Dr. Devil's rule was</h2>
     <div class="rule" id="rule-name"></div>
     <p>You wrote: <em id="your-rule"></em></p>
-    <p><strong>Did your rule match?</strong></p>
+    <p><strong>Do you think your rule is the same?</strong></p>
+    <p class="muted">A real person will check your answer, and the class results update as soon as that happens. This question is just for you.</p>
     <div class="error" id="err-verdict" aria-live="polite"></div>
     <div class="actions">
       <button data-verdict="same">Yes, the same rule</button>
-      <button data-verdict="partly" class="quiet">Partly</button>
       <button data-verdict="different" class="quiet">No, a different rule</button>
+      <button data-verdict="skipped" class="quiet">Skip</button>
     </div>
   </section>
 
   <section id="done" hidden>
-    <h2>How you did</h2>
-    <p id="own-summary"></p>
-    <p id="own-note" class="muted"></p>
-
-    <h2>How the class did</h2>
+    <p id="own-status"></p>
     <div id="stats"></div>
 
     <div class="actions">
@@ -143,16 +172,149 @@
 </main>
 
 <script>
+// Chart builders: pure functions from numbers to SVG markup. Kept apart from the game
+// logic so they can be exercised outside a browser (see scripts/check-charts.mjs).
+window.charts = (() => {
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // Lighter tints of the fits / does-not-fit colours used during the game, plus a gray
+  // of the same perceptual lightness (OKLab L about 0.70) for the in-between answer.
+  const FITS = '#66b58f';
+  const NOFIT = '#de7f74';
+  const NEUTRAL = '#a0a0a0';
+  const VERDICTS = [
+    { key: 'same', label: 'Same rule', color: FITS },
+    { key: 'different', label: 'Different rule', color: NOFIT },
+  ];
+  const CONFS = [
+    { key: 'certain', label: 'Certain', color: '#376795' },
+    { key: 'fairly', label: 'Fairly sure', color: '#528fad' },
+    { key: 'unsure', label: 'Not sure', color: '#aadce0' },
+  ];
+  const pct = (n, d) => (d ? Math.round((100 * n) / d) : 0) + '%';
+
+  // Is this fill light enough that dark text reads better on it than white?
+  function isLight(hex) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55;
+  }
+
+  function bar(x, y, w, h, color, extra = '') {
+    if (h <= 0 || w <= 0) return '';
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" ${extra}/>`;
+  }
+
+  function legend(items) {
+    return `<ul class="legend">${items
+      .map((i) => `<li><i style="background:${i.color}"></i>${esc(i.label)}${i.n == null ? '' : ` <span class="muted">(${i.n})</span>`}</li>`)
+      .join('')}</ul>`;
+  }
+
+  /** Pie of verdicts. counts: {same, different}. */
+  function pie(counts) {
+    const items = VERDICTS.map((v) => ({ ...v, n: counts[v.key] || 0 }));
+    const N = items.reduce((s, i) => s + i.n, 0);
+    const cx = 80, cy = 80, r = 72;
+    let a0 = -Math.PI / 2; // start at twelve o'clock and go counter-clockwise, so the first slice is on the left
+    let paths = '';
+    let labels = '';
+    for (const i of items) {
+      if (!i.n) continue;
+      const frac = i.n / N;
+      const a1 = a0 - 2 * Math.PI * frac;
+      const attrs = `class="slice" data-verdict="${i.key}" fill="${i.color}" stroke="#fff" stroke-width="0.75" tabindex="0" role="button" aria-label="${esc(i.label)}: ${i.n} of ${N} people, ${pct(i.n, N)}"`;
+      if (frac >= 0.9999) {
+        paths += `<circle cx="${cx}" cy="${cy}" r="${r}" ${attrs}/>`;
+      } else {
+        const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+        const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+        const large = frac > 0.5 ? 1 : 0;
+        paths += `<path d="M${cx},${cy} L${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large},0 ${x1.toFixed(2)},${y1.toFixed(2)} Z" ${attrs}/>`;
+      }
+      if (frac >= 0.08) {
+        const am = (a0 + a1) / 2;
+        const lx = cx + 0.62 * r * Math.cos(am), ly = cy + 0.62 * r * Math.sin(am);
+        labels += `<text class="lab ${isLight(i.color) ? '' : 'on'}" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${pct(i.n, N)}</text>`;
+      }
+      a0 = a1;
+    }
+    return `<svg class="pie" viewBox="0 0 160 160" aria-label="Whether each person's rule matched">${paths}${labels}</svg>${legend(items)}`;
+  }
+
+  /** Horizontal bars of confidence levels. counts: {certain, fairly, unsure}. */
+  function bars(counts) {
+    const items = CONFS.map((c) => ({ ...c, n: counts[c.key] || 0 }));
+    const W = 240, row = 24, h = 16, left = 78, right = 28;
+    const H = row * items.length;
+    const plotW = W - left - right;
+    const max = Math.max(1, ...items.map((i) => i.n));
+    let out = `<line class="axis" x1="${left}" x2="${left}" y1="0" y2="${H}"/>`;
+    items.forEach((i, k) => {
+      const y = row * k + (row - h) / 2;
+      const w = (plotW * i.n) / max;
+      out += bar(left, y, w, h, i.color, `aria-label="${esc(i.label)}: ${i.n}"`);
+      out += `<text class="lab muted" x="${left - 6}" y="${y + h / 2}" text-anchor="end" dominant-baseline="middle">${esc(i.label)}</text>`;
+      out += `<text class="lab" x="${left + w + 5}" y="${y + h / 2}" dominant-baseline="middle">${i.n}</text>`;
+    });
+    return `<svg viewBox="0 0 ${W} ${H}" aria-label="How sure people were, number of people per answer">${out}</svg>`;
+  }
+
+  /**
+   * Histogram of how many sets people tested. rows: [{k, people, no}] for k = 0..max,
+   * where `no` is the number of those sets that did not fit. Bar height is people; each
+   * bar is split by the share of fitting versus non-fitting sets that group tested.
+   */
+  function stacked(rows) {
+    const W = 320, H = 190, top = 22, bottom = 40, gap = 0.75; // hairline between the two stacks
+    const plotH = H - top - bottom;
+    const maxK = Math.max(1, ...rows.filter((r) => r.people > 0).map((r) => r.k));
+    const shown = rows.filter((r) => r.k <= maxK);
+    const max = Math.max(1, ...shown.map((r) => r.people));
+    const slot = W / (maxK + 1), w = Math.max(3, Math.min(28, slot * 0.7));
+    const every = maxK <= 15 ? 1 : 5;
+    let out = `<line class="axis" x1="0" x2="${W}" y1="${H - bottom}" y2="${H - bottom}"/>`;
+    for (const r of shown) {
+      const x = slot * r.k + (slot - w) / 2;
+      const base = H - bottom;
+      if (r.k % every === 0 || r.k === maxK) {
+        out += `<text class="lab muted" x="${x + w / 2}" y="${base + 16}" text-anchor="middle">${r.k}</text>`;
+      }
+      if (!r.people) continue;
+      const h = (plotH * r.people) / max;
+      const total = r.k * r.people;
+      const noH = total ? Math.round((h * r.no) / total) : 0;
+      const fitH = h - noH;
+      const label = `${r.people} ${r.people === 1 ? 'person' : 'people'} tested ${r.k} ${r.k === 1 ? 'set' : 'sets'}`;
+      if (noH > 0 && fitH > 0) {
+        out += bar(x, base - fitH, w, fitH, FITS, `aria-label="${label}: fitting share"`);
+        out += bar(x, base - h, w, noH - gap, NOFIT, `aria-label="${label}: non-fitting share"`);
+      } else {
+        out += bar(x, base - h, w, h, noH > 0 ? NOFIT : total ? FITS : '#9aa7b1', `aria-label="${label}"`);
+      }
+      out += `<text class="lab" x="${x + w / 2}" y="${base - h - 6}" text-anchor="middle">${r.people}</text>`;
+    }
+    out += `<text class="lab muted" x="${W / 2}" y="${H - 4}" text-anchor="middle">number of tests</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" aria-label="Number of people by how many sets they tested, each bar split into fitting and non-fitting sets">${out}</svg>` +
+      legend([{ label: 'Fits the rule', color: FITS }, { label: 'Does not fit', color: NOFIT }]);
+  }
+
+  return { pie, bars, stacked, VERDICTS, CONFS };
+})();
+</script>
+
+<script>
 (() => {
   const TOKEN = "__TOKEN__";
   const state = __STATE__;
   let practice = false;
-  let noCount = state.n_no;
-  let attemptCount = state.attempts.length;
 
   const $ = (id) => document.getElementById(id);
+  const TITLES = { done: 'Cohort statistics' };
+  const GAME_TITLE = document.title;
   const show = (id) => {
     for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== id;
+    const title = TITLES[id] || GAME_TITLE;
+    document.querySelector('main > h1').textContent = title;
+    document.title = title;
   };
 
   async function call(action, body) {
@@ -192,7 +354,6 @@
     try {
       const r = await call('attempt', { a: vals[0], b: vals[1], c: vals[2], practice });
       addRow(vals[0], vals[1], vals[2], r.fits);
-      if (r.recorded) { attemptCount = r.n; if (!r.fits) noCount++; }
       showVerdict(r.fits, practice ? 'practice, not counted' : '');
       $('a').value = ''; $('b').value = ''; $('c').value = ''; $('a').focus();
     } catch (e) {
@@ -245,7 +406,7 @@
       $('err-verdict').textContent = '';
       try {
         const r = await call('verdict', { verdict: btn.dataset.verdict });
-        state.verdict = btn.dataset.verdict;
+        state.self_verdict = btn.dataset.verdict;
         state.stats = r.stats;
         showDone();
       } catch (e) {
@@ -254,44 +415,69 @@
     });
   }
 
-  const CONF_LABEL = { unsure: 'not sure', fairly: 'fairly sure', certain: 'certain' };
-  const VERDICT_LABEL = { same: 'matched the rule', partly: 'partly matched the rule', different: 'was a different rule' };
-
   function showDone() {
-    const sets = attemptCount === 1 ? '1 set' : `${attemptCount} sets`;
-    $('own-summary').textContent =
-      `You tested ${sets}, ${noCount} of which did not fit. You said you were ${CONF_LABEL[state.confidence]}, and your rule ${VERDICT_LABEL[state.verdict]}.`;
-    $('own-note').textContent = noCount === 0
-      ? 'Every set you tested fitted. A set that fits can never rule out an alternative hypothesis; only a set that does not fit can do that. This tendency to look for confirming evidence is what the game is about.'
-      : 'You tested at least one set that did not fit. Those are the tests that can actually rule out a wrong hypothesis.';
+    $('own-status').textContent = state.verdict === 'same'
+      ? 'Your rule has been checked: it is the same as Dr. Devil\'s.'
+      : state.verdict === 'different'
+        ? 'Your rule has been checked: it is not the same as Dr. Devil\'s.'
+        : 'Your rule is waiting to be checked by a real person. Come back later to see the result.';
     renderStats(state.stats);
     show('done');
   }
 
-  function pct(n, d) { return d ? Math.round((100 * n) / d) + '%' : '0%'; }
-
   function renderStats(s) {
     const el = $('stats');
     if (!s || !s.available) {
-      el.innerHTML = `<p class="muted">Class results appear once at least ${s ? s.min_cohort : 5} people have finished. So far ${s ? s.completed : 0} have.</p>`;
+      el.innerHTML = `<p class="muted">Class results appear once at least ${s ? s.min_cohort : 5} answers have been checked. So far ${s ? s.graded : 0} of ${s ? s.finished : 0} have.</p>`;
       return;
     }
     const c = s.counts;
     const g = (k) => c[k] || 0;
-    const N = s.completed;
-    const avg = (g('attempts') / N).toFixed(1);
-    let html = `<p>${N} people have finished. On average they tested ${avg} sets before writing down a rule, and ${pct(g('got_a_no'), N)} tested at least one set that did not fit.</p>`;
-    html += '<table><tr><th>How sure they were</th><th>People</th><th>Same rule</th><th>Partly</th><th>Different</th></tr>';
-    for (const conf of ['certain', 'fairly', 'unsure']) {
-      const n = g('conf:' + conf);
-      html += `<tr><td>${CONF_LABEL[conf][0].toUpperCase() + CONF_LABEL[conf].slice(1)}</td><td class="num">${n}</td>`;
-      for (const v of ['same', 'partly', 'different']) html += `<td class="num">${pct(g(`conf:${conf}|verdict:${v}`), n)}</td>`;
-      html += '</tr>';
-    }
-    html += `<tr><th>Everyone</th><td class="num">${N}</td>`;
-    for (const v of ['same', 'partly', 'different']) html += `<td class="num">${pct(g('verdict:' + v), N)}</td>`;
-    html += '</tr></table>';
-    el.innerHTML = html;
+
+    el.innerHTML = `<div class="charts">
+      <figure class="fig-pie"><figcaption>How many found the rule?<small>Checked so far: ${s.graded} of the ${s.finished} who finished. Select a slice to see just that group in the other charts.</small></figcaption><div id="pie"></div></figure>
+      <figure class="fig-conf"><figcaption>How sure were they?</figcaption><div id="conf-chart"></div></figure>
+      <figure class="fig-tests"><figcaption>How many tests?</figcaption><div id="tests-chart"></div></figure>
+    </div>`;
+
+    $('pie').innerHTML = charts.pie({ same: g('verdict:same'), different: g('verdict:different') });
+
+    // The two histograms show everyone, or just the group whose pie slice is hovered,
+    // focused with the keyboard, or tapped (tapping pins it; tapping again unpins).
+    const drawGroup = (v) => {
+      const groups = v ? [v] : ['same', 'different'];
+      const sum = (suffix) => groups.reduce((t, k) => t + g(`verdict:${k}${suffix}`), 0);
+
+      const conf = {};
+      for (const k of ['certain', 'fairly', 'unsure']) conf[k] = groups.reduce((t, gv) => t + g(`conf:${k}|verdict:${gv}`), 0);
+      $('conf-chart').innerHTML = charts.bars(conf);
+
+      const rows = [];
+      for (let k = 0; k <= state.max_attempts; k++) rows.push({ k, people: sum(`|tests:${k}`), no: sum(`|tests:${k}|no`) });
+      $('tests-chart').innerHTML = charts.stacked(rows);
+
+      const svg = $('pie').querySelector('svg');
+      svg.classList.toggle('has-focus', !!v);
+      for (const sl of svg.querySelectorAll('.slice')) sl.classList.toggle('focus', sl.dataset.verdict === v);
+    };
+
+    let pinned = null;
+    const pieEl = $('pie');
+    const slice = (e) => e.target.closest('.slice');
+    pieEl.addEventListener('pointerover', (e) => { const s = slice(e); if (s) drawGroup(s.dataset.verdict); });
+    pieEl.addEventListener('pointerleave', () => drawGroup(pinned));
+    pieEl.addEventListener('focusin', (e) => { const s = slice(e); if (s) drawGroup(s.dataset.verdict); });
+    pieEl.addEventListener('focusout', () => drawGroup(pinned));
+    pieEl.addEventListener('click', (e) => {
+      const s = slice(e);
+      if (!s) return;
+      pinned = pinned === s.dataset.verdict ? null : s.dataset.verdict;
+      drawGroup(pinned);
+    });
+    pieEl.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && slice(e)) { e.preventDefault(); slice(e).click(); }
+    });
+    drawGroup(null);
   }
 
   $('practice').addEventListener('click', () => {

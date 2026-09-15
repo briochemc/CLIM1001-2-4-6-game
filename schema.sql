@@ -10,7 +10,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   finished   INTEGER,                   -- unix seconds when the rule was submitted
   rule_text  TEXT,
   confidence TEXT,                      -- unsure | fairly | certain
-  verdict    TEXT,                      -- same | partly | different
+  verdict    TEXT,                      -- same | different, as graded (NULL = waiting to be checked)
+  graded_by  TEXT,                      -- auto:<pattern id> | manual
+  graded_at  INTEGER,
+  self_verdict TEXT,                    -- what the player thought: same | different | skipped
   n_attempts INTEGER NOT NULL DEFAULT 0,
   n_no       INTEGER NOT NULL DEFAULT 0 -- how many tested sets did not fit
 );
@@ -33,8 +36,9 @@ CREATE TABLE IF NOT EXISTS nonces (
   ts    INTEGER NOT NULL
 );
 
--- Running counts per course and rule, so showing class stats reads a dozen rows
--- rather than scanning every session.
+-- Running counts per course and rule, so showing class stats reads a few dozen rows
+-- rather than scanning every session. Derived from sessions (see src/tally.js); the
+-- grading script rebuilds it from scratch, the worker adds to it as players finish.
 CREATE TABLE IF NOT EXISTS tally (
   ctx  TEXT NOT NULL,
   rule TEXT NOT NULL,

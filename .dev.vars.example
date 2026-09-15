@@ -4,3 +4,7 @@ LTI_KEY=clim1001
 LTI_SECRET=change-me-to-a-long-random-string
 SESSION_SECRET=change-me-to-another-long-random-string
 PLAYER_SALT=change-me-to-a-third-long-random-string
+
+# Turns on http://localhost:8787/dev, a page that launches the game as any fake student.
+# Local only: never set this in production.
+DEV_LAUNCHER=1
