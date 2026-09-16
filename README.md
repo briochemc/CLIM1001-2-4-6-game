@@ -77,7 +77,9 @@ openssl rand -base64 48 | npx wrangler secret put PLAYER_SALT
 ```
 
 Write the key and the LTI secret down somewhere safe before piping them away. For the
-current deployment they are in `.wrangler/moodle-secrets.txt`, which git ignores.
+current deployment they are in `.wrangler/moodle-secrets.txt`, which git ignores, and
+`npm run moodle-secrets` prints them whenever a Moodle activity needs setting up. If the
+file is lost, the same command explains how to set a fresh secret.
 
 Changing `PLAYER_SALT` later breaks the link between existing sessions and returning
 players, who would then start a fresh game. Changing `LTI_SECRET` requires updating Moodle.
@@ -143,13 +145,41 @@ the tally under keys prefixed `staff|`.
 | Task | Command |
 |---|---|
 | Publish a code change | `npm run deploy` |
+| Show the key and secret for a new Moodle activity | `npm run moodle-secrets` |
 | Grade the rules students wrote | `npm run grade` (see below) |
 | See how many finished, per course | `npx wrangler d1 execute clim1001-246-game --remote --command "SELECT ctx, COUNT(*), SUM(verdict IS NOT NULL) AS checked FROM sessions WHERE finished IS NOT NULL GROUP BY ctx"` |
 | Remove one course's data | see *Looking at the data* |
-| Rotate the Moodle secret | `npx wrangler secret put LTI_SECRET`, then update every Moodle activity |
+| Reset or rotate the Moodle secret | see *Resetting the shared secret* |
 
 Class stats stay hidden until `MIN_COHORT` checked answers exist in a course, so the first
 few students in each course see "results appear once ..." rather than a chart.
+
+### Resetting the shared secret
+
+Cloudflare stores secrets write-only, so the shared secret cannot be read back from any
+machine. If it is not in the password manager and not in `.wrangler/moodle-secrets.txt` on
+the machine at hand, set a new one. It takes a minute and touches no data; launches fail
+with "bad signature" only between the two steps, so do them together.
+
+1. On any machine logged in with `npx wrangler login`, generate and upload a new secret.
+   `tee` shows the value on screen once so it can be copied:
+
+   ```sh
+   openssl rand -base64 32 | tr -d '/+=' | tee /dev/stderr | npx wrangler secret put LTI_SECRET
+   ```
+
+2. Put the value in the password manager, and in `.wrangler/moodle-secrets.txt` on that
+   machine as `Shared secret: <value>` (with `Consumer key: clim1001` above it) so
+   `npm run moodle-secrets` works there too.
+
+3. In Moodle, edit every External tool activity that points at the tool and paste the new
+   value into Shared secret under *Show more...*. Each activity holds its own copy, so a
+   tool used in three courses means three edits. The consumer key stays `clim1001`.
+
+Only `LTI_SECRET` ever needs this. `SESSION_SECRET` can be rotated the same way with no
+other change (players mid-game are asked to reopen the activity). `PLAYER_SALT` should
+not be rotated while a course is running: returning players would no longer match their
+earlier session and would start a fresh game.
 
 ## Local development
 

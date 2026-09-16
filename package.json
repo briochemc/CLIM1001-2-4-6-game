@@ -13,6 +13,7 @@
     "test-launch": "node scripts/test-launch.mjs",
     "seed": "node scripts/seed.mjs",
     "grade": "node scripts/grade.mjs",
+    "moodle-secrets": "node scripts/moodle-secrets.mjs",
     "check-patterns": "node scripts/check-patterns.mjs",
     "check-charts": "node scripts/check-charts.mjs"
   },
