@@ -5,7 +5,7 @@ import { gradeText } from './rule-patterns.js';
 import { tallyRows } from './tally.js';
 
 const TOKEN_TTL_SECONDS = 4 * 60 * 60; // a launch stays valid for 4 hours
-const MAX_ATTEMPTS = 40;
+const MAX_ATTEMPTS = 12; // sets a player may test before writing down a rule (practice mode is unlimited)
 const CONFIDENCE = new Set(['unsure', 'fairly', 'certain']);
 const SELF_VERDICT = new Set(['same', 'different', 'skipped']);
 
