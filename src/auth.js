@@ -84,7 +84,7 @@ export async function ltiSignature(launchUrl, pairs, secret) {
  * Build the form fields Moodle would send to launch the tool for one user. Used by the
  * local dev launcher and the scripts; Moodle itself does this on the real site.
  */
-export async function signedLaunch(launchUrl, { userId, ctx, roles = 'Learner', consumerKey, secret }) {
+export async function signedLaunch(launchUrl, { userId, ctx, roles = 'Learner', extra = {}, consumerKey, secret }) {
   const fields = {
     lti_message_type: 'basic-lti-launch-request',
     lti_version: 'LTI-1p0',
@@ -97,6 +97,7 @@ export async function signedLaunch(launchUrl, { userId, ctx, roles = 'Learner', 
     oauth_timestamp: String(Math.floor(Date.now() / 1000)),
     oauth_nonce: toHex(crypto.getRandomValues(new Uint8Array(8))),
     oauth_version: '1.0',
+    ...extra, // e.g. custom_next_url, launch_presentation_return_url
   };
   fields.oauth_signature = await ltiSignature(launchUrl, Object.entries(fields), secret);
   return fields;

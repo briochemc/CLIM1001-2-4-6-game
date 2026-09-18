@@ -57,6 +57,7 @@ async function launch(request, env) {
 
   const token = await signToken({ pid, ctx, exp: now + TOKEN_TTL_SECONDS }, env.SESSION_SECRET);
   const state = await playerState(env, pid);
+  state.nav = launchNav(form);
   const page = gameHtml
     .replace('__TOKEN__', token)
     .replace('__STATE__', JSON.stringify(state).replace(/</g, '\\u003c'));
@@ -70,6 +71,33 @@ async function launch(request, env) {
 // comma separated when there are several. Anyone with a staff role is an instructor here.
 function launchRole(roles) {
   return /instructor|teachingassistant|contentdeveloper|administrator|mentor|manager/i.test(roles || '') ? 'instructor' : 'learner';
+}
+
+// Optional links out of the game, set per activity in Moodle's "Custom parameters" box:
+//   prev_url / next_url / course_url, each with an optional *_label.
+// Moodle sends them as custom_<name> inside the signed launch, so students cannot alter
+// them. Without course_url, Moodle's own return address (the course home page) is used.
+// The page shows them only when it has the whole window, never inside Moodle's frame.
+function launchNav(form) {
+  const link = (url, label) => {
+    const href = safeUrl(url);
+    return href ? { url: href, label: String(label || '').trim().slice(0, 60) } : null;
+  };
+  return {
+    prev: link(form.get('custom_prev_url'), form.get('custom_prev_label')),
+    next: link(form.get('custom_next_url'), form.get('custom_next_label')),
+    course: link(form.get('custom_course_url') || form.get('launch_presentation_return_url'), form.get('custom_course_label')),
+  };
+}
+
+// Only ordinary web addresses are ever turned into links.
+function safeUrl(value) {
+  try {
+    const u = new URL(String(value || '').trim());
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /* ---------- Game API ---------- */
@@ -239,13 +267,23 @@ async function devLauncher(url, env) {
   <p><label>User id <input name="user" value="alice" required></label></p>
   <p><label>Course id <input name="ctx" value="${esc(ctx)}"></label></p>
   <p><label><input type="checkbox" name="instructor" value="1"> Launch as an instructor (plays, but is not counted)</label></p>
+  <p><label><input type="checkbox" name="nav" value="1"> Send previous / next / course links, as Moodle custom parameters would</label></p>
   <p><button>Launch the game</button></p>
 </form>
 <p style="color:#666">Same user id + course id = same player, so reopening resumes where they left off.</p>`);
   }
 
   const launchUrl = `${url.origin}/launch`;
-  const fields = await signedLaunch(launchUrl, { userId, ctx, roles, consumerKey: env.LTI_KEY, secret: env.LTI_SECRET });
+  // The addresses come from .dev.vars (DEV_PREV_URL, DEV_NEXT_URL, DEV_COURSE_URL) so real
+  // course links stay out of the repository; without them, placeholders are used.
+  const extra = url.searchParams.get('nav')
+    ? {
+        custom_prev_url: env.DEV_PREV_URL || 'https://example.org/mod/page/view.php?id=101',
+        custom_next_url: env.DEV_NEXT_URL || 'https://example.org/mod/quiz/view.php?id=103',
+        launch_presentation_return_url: env.DEV_COURSE_URL || 'https://example.org/course/view.php?id=7',
+      }
+    : {};
+  const fields = await signedLaunch(launchUrl, { userId, ctx, roles, extra, consumerKey: env.LTI_KEY, secret: env.LTI_SECRET });
   const inputs = Object.entries(fields)
     .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`)
     .join('\n');

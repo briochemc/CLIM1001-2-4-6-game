@@ -8,3 +8,8 @@ PLAYER_SALT=change-me-to-a-third-long-random-string
 # Turns on http://localhost:8787/dev, a page that launches the game as any fake student.
 # Local only: never set this in production.
 DEV_LAUNCHER=1
+
+# Optional: real Moodle addresses for the dev launcher's "send navigation links" box.
+# DEV_PREV_URL=https://moodle.example.edu/mod/lesson/view.php?id=111&forceview=1
+# DEV_NEXT_URL=https://moodle.example.edu/mod/lesson/view.php?id=112&forceview=1
+# DEV_COURSE_URL=https://moodle.example.edu/course/view.php?id=7

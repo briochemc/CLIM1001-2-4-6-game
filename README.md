@@ -140,6 +140,59 @@ to show staff only or everyone, and they see the charts even before the course h
 without polluting the numbers. The role is stored in `sessions.role`; staff counts live in
 the tally under keys prefixed `staff|`.
 
+### Giving the game the full window, with links to the neighbouring activities
+
+Embedded, Moodle gives the tool whatever height is left of the browser window below its own
+header, and the game has to scroll inside that frame. Core Moodle offers no way for a tool
+to ask for more height, and no setting for it. The way around it is to let the game take
+over the window, and to give students links back into the course from inside the game.
+
+1. Edit the External tool activity and set **Launch container** to **Existing window**.
+   (Phones and tablets always get this, whatever the setting.)
+2. Collect the addresses. On any activity page in the course, right-click Moodle's
+   *previous activity* and *next activity* buttons and copy the link, or open the activity
+   and copy the address bar. They look like
+   `https://moodle.example.edu/mod/lesson/view.php?id=9119456&forceview=1`. The
+   `forceview=1` part is something Moodle adds to its own navigation buttons and is fine to
+   keep.
+3. Still in the activity settings, click **Show more...** and fill **Custom parameters**,
+   one per line:
+
+   ```
+   prev_url=https://moodle.example.edu/mod/lesson/view.php?id=9119456&forceview=1
+   next_url=https://moodle.example.edu/mod/lesson/view.php?id=9119457&forceview=1
+   course_url=https://moodle.example.edu/course/view.php?id=101857
+   ```
+
+4. Save, and open the activity. A footer under the game shows *← Previous activity*,
+   *Back to the course* and *Next activity →* on every screen, next to the existing
+   *Play again for fun* button on the results screen.
+
+| Parameter | Effect |
+|---|---|
+| `prev_url`, `next_url` | Adds the link. Leave the line out and that link is not shown. |
+| `course_url` | Optional. Without it, *Back to the course* uses the return address Moodle sends with every launch, which leads to the course home page. |
+| `prev_label`, `next_label`, `course_label` | Optional wording, up to 60 characters, e.g. `next_label=Week 3 quiz` shows *Week 3 quiz →*. |
+
+Things to know:
+
+- The footer appears only when the game has the whole window. In an embedded activity
+  nothing changes, because Moodle's own navigation is already around the frame. So the
+  same tool can be embedded in one course and full-window in another.
+- The parameters belong to the activity, so each course, and each copy of the activity,
+  sets its own.
+- Moodle sends them inside the signed launch, so students cannot change where the links
+  go, and the tool only accepts ordinary `http(s)` addresses.
+- **The addresses are fixed text.** When activities are moved or replaced, or the course is
+  copied for a new year, Moodle gives activities new id numbers. Check these lines at every
+  rollover, or the links lead to last year's pages.
+
+To try it locally, tick *Send previous / next / course links* on the dev launcher page. It
+uses `DEV_PREV_URL`, `DEV_NEXT_URL` and `DEV_COURSE_URL` from `.dev.vars` if they are set
+(see `.dev.vars.example`), which keeps real course addresses out of the repository. From
+the command line, `PREV_URL=... NEXT_URL=... COURSE_URL=... npm run test-launch -- alice`
+does the same. The dev launcher opens the game in a full window, so the footer shows.
+
 ## Day-to-day operations
 
 | Task | Command |
