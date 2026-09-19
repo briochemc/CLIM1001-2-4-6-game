@@ -262,12 +262,14 @@ window.charts = (() => {
   }
 
   /** Horizontal bars of confidence levels. counts: {certain, fairly, unsure}. */
-  function bars(counts) {
+  function bars(counts, scaleMax = 0) {
     const items = CONFS.map((c) => ({ ...c, n: counts[c.key] || 0 }));
     const W = 240, row = 24, h = 16, left = 78, right = 28;
     const H = row * items.length;
     const plotW = W - left - right;
-    const max = Math.max(1, ...items.map((i) => i.n));
+    // scaleMax pins the axis, so the bars of a sub-group are drawn against the whole
+    // group's range and do not rescale as the selection changes.
+    const max = Math.max(1, scaleMax, ...items.map((i) => i.n));
     let out = `<line class="axis" x1="${left}" x2="${left}" y1="0" y2="${H}"/>`;
     items.forEach((i, k) => {
       const y = row * k + (row - h) / 2;
@@ -284,12 +286,13 @@ window.charts = (() => {
    * where `no` is the number of those sets that did not fit. Bar height is people; each
    * bar is split by the share of fitting versus non-fitting sets that group tested.
    */
-  function stacked(rows) {
+  function stacked(rows, scale = {}) {
     const W = 320, H = 190, top = 22, bottom = 40, gap = 0.75; // hairline between the two stacks
     const plotH = H - top - bottom;
-    const maxK = Math.max(1, ...rows.filter((r) => r.people > 0).map((r) => r.k));
+    // scale.k and scale.people pin the two axes, for the same reason as in bars().
+    const maxK = Math.max(1, scale.k || 0, ...rows.filter((r) => r.people > 0).map((r) => r.k));
     const shown = rows.filter((r) => r.k <= maxK);
-    const max = Math.max(1, ...shown.map((r) => r.people));
+    const max = Math.max(1, scale.people || 0, ...shown.map((r) => r.people));
     const slot = W / (maxK + 1), w = Math.max(3, Math.min(28, slot * 0.7));
     const every = maxK <= 15 ? 1 : 5;
     let out = `<line class="axis" x1="0" x2="${W}" y1="${H - bottom}" y2="${H - bottom}"/>`;
@@ -491,17 +494,32 @@ window.charts = (() => {
 
     // The two histograms show everyone, or just the group whose pie slice is hovered,
     // focused with the keyboard, or tapped (tapping pins it; tapping again unpins).
-    const drawGroup = (v) => {
-      const groups = v ? [v] : ['same', 'different'];
-      const sum = (suffix) => groups.reduce((t, k) => t + g(`verdict:${k}${suffix}`), 0);
-
+    const confOf = (groups) => {
       const conf = {};
       for (const k of ['certain', 'fairly', 'unsure']) conf[k] = groups.reduce((t, gv) => t + g(`conf:${k}|verdict:${gv}`), 0);
-      $('conf-chart').innerHTML = charts.bars(conf);
-
+      return conf;
+    };
+    const rowsOf = (groups) => {
+      const sum = (suffix) => groups.reduce((t, k) => t + g(`verdict:${k}${suffix}`), 0);
       const rows = [];
       for (let k = 0; k <= state.max_attempts; k++) rows.push({ k, people: sum(`|tests:${k}`), no: sum(`|tests:${k}|no`) });
-      $('tests-chart').innerHTML = charts.stacked(rows);
+      return rows;
+    };
+
+    // Axes are fixed by everyone in this view, so selecting a slice changes the bars
+    // and never the scale.
+    const everyone = ['same', 'different'];
+    const confScale = Math.max(0, ...Object.values(confOf(everyone)));
+    const allRows = rowsOf(everyone);
+    const testsScale = {
+      people: Math.max(0, ...allRows.map((r) => r.people)),
+      k: Math.max(0, ...allRows.filter((r) => r.people > 0).map((r) => r.k)),
+    };
+
+    const drawGroup = (v) => {
+      const groups = v ? [v] : everyone;
+      $('conf-chart').innerHTML = charts.bars(confOf(groups), confScale);
+      $('tests-chart').innerHTML = charts.stacked(rowsOf(groups), testsScale);
 
       const svg = $('pie').querySelector('svg');
       svg.classList.toggle('has-focus', !!v);
