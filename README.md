@@ -296,7 +296,9 @@ npm run grade
 
 This re-runs the patterns over every finished session (so a pattern you added today also
 grades last week's answers), lists what still matches nothing, and asks you to grade each
-one: `s` for the same rule, `d` for a different rule, Enter to leave it for later. It then
+one: `s` for the same rule, `d` for a different rule, Enter to leave it for later. Under each
+answer it shows the sets that student tested, with ✓ or ✗ for whether each fitted, which is
+often the best clue to what a terse answer such as `<<<` meant. It then
 writes the verdicts back and rebuilds the class tally. `npm run grade -- --list` only
 reports; `--show-auto` also prints every pattern-graded answer so you can spot mistakes;
 `--local` targets the local dev database.
