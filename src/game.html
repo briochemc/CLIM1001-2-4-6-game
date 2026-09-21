@@ -284,46 +284,37 @@ window.charts = (() => {
   }
 
   /**
-   * Histogram of how many sets people tested. rows: [{k, people, no}] for k = 0..max,
-   * where `no` is the number of those sets that did not fit. Bar height is people; each
-   * bar is split by the share of fitting versus non-fitting sets that group tested.
+   * Tests in the order they were made. rows: [{k, people, no}] for k = 1..max, where
+   * `people` made a k-th test and for `no` of them it did not fit. Bar height is people,
+   * so the bars can only shrink from left to right as people stop testing.
    */
-  function stacked(rows, scale = {}) {
+  function byTest(rows, maxK = 0) {
     const W = 320, H = 190, top = 22, bottom = 40, gap = 0.75; // hairline between the two stacks
-    const plotH = H - top - bottom;
-    // scale.k and scale.people pin the two axes, for the same reason as in bars().
-    const maxK = Math.max(1, scale.k || 0, ...rows.filter((r) => r.people > 0).map((r) => r.k));
-    const shown = rows.filter((r) => r.k <= maxK);
-    const max = Math.max(1, scale.people || 0, ...shown.map((r) => r.people));
-    const slot = W / (maxK + 1), w = Math.max(3, Math.min(28, slot * 0.7));
-    const every = maxK <= 15 ? 1 : 5;
-    let out = `<line class="axis" x1="0" x2="${W}" y1="${H - bottom}" y2="${H - bottom}"/>`;
+    const plotH = H - top - bottom, base = H - bottom;
+    // maxK pins the horizontal axis, for the same reason as in bars(). The vertical one
+    // follows the group shown: a small group's split would be unreadable otherwise.
+    const lastK = Math.max(1, maxK, ...rows.filter((r) => r.people > 0).map((r) => r.k));
+    const shown = rows.filter((r) => r.k <= lastK);
+    const max = Math.max(1, ...shown.map((r) => r.people));
+    const slot = W / lastK, w = Math.max(3, Math.min(28, slot * 0.7));
+    let out = `<line class="axis" x1="0" x2="${W}" y1="${base}" y2="${base}"/>`;
     for (const r of shown) {
-      const x = slot * r.k + (slot - w) / 2;
-      const base = H - bottom;
-      if (r.k % every === 0 || r.k === maxK) {
-        out += `<text class="lab muted" x="${x + w / 2}" y="${base + 16}" text-anchor="middle">${r.k}</text>`;
-      }
+      const x = slot * (r.k - 1) + (slot - w) / 2;
+      out += `<text class="lab muted" x="${x + w / 2}" y="${base + 16}" text-anchor="middle">${r.k}</text>`;
       if (!r.people) continue;
       const h = (plotH * r.people) / max;
-      const total = r.k * r.people;
-      const noH = total ? Math.round((h * r.no) / total) : 0;
-      const fitH = h - noH;
-      const label = `${r.people} ${r.people === 1 ? 'person' : 'people'} tested ${r.k} ${r.k === 1 ? 'set' : 'sets'}`;
-      if (noH > 0 && fitH > 0) {
-        out += bar(x, base - fitH, w, fitH, FITS, `aria-label="${label}: fitting share"`);
-        out += bar(x, base - h, w, noH - gap, NOFIT, `aria-label="${label}: non-fitting share"`);
-      } else {
-        out += bar(x, base - h, w, h, noH > 0 ? NOFIT : total ? FITS : '#9aa7b1', `aria-label="${label}"`);
-      }
+      const noH = (h * r.no) / r.people, fitH = h - noH;
+      const label = `Test ${r.k}: ${r.people} ${r.people === 1 ? 'person' : 'people'}`;
+      out += bar(x, base - fitH, w, fitH, FITS, `aria-label="${label}, ${r.people - r.no} fitting"`);
+      out += bar(x, base - h, w, noH - (fitH > 0 ? gap : 0), NOFIT, `aria-label="${label}, ${r.no} not fitting"`);
       out += `<text class="lab" x="${x + w / 2}" y="${base - h - 6}" text-anchor="middle">${r.people}</text>`;
     }
-    out += `<text class="lab muted" x="${W / 2}" y="${H - 4}" text-anchor="middle">number of tests</text>`;
-    return `<svg viewBox="0 0 ${W} ${H}" aria-label="Number of people by how many sets they tested, each bar split into fitting and non-fitting sets">${out}</svg>` +
+    out += `<text class="lab muted" x="${W / 2}" y="${H - 4}" text-anchor="middle">test number</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" aria-label="Number of people who made a first, second, third test and so on, each bar split into fitting and non-fitting sets">${out}</svg>` +
       legend([{ label: 'Fits the rule', color: FITS }, { label: 'Does not fit', color: NOFIT }]);
   }
 
-  return { pie, bars, stacked, VERDICTS, CONFS };
+  return { pie, bars, byTest, VERDICTS, CONFS };
 })();
 </script>
 
@@ -489,7 +480,7 @@ window.charts = (() => {
     $('charts-host').innerHTML = `<div class="charts">
       <figure class="fig-pie"><figcaption>How many found the rule?<small>Checked so far: ${s.graded} of the ${s.finished} who finished. Select a slice to see just that group in the other charts.</small></figcaption><div id="pie"></div></figure>
       <figure class="fig-conf"><figcaption>How sure were they?</figcaption><div id="conf-chart"></div></figure>
-      <figure class="fig-tests"><figcaption>How many tests?</figcaption><div id="tests-chart"></div></figure>
+      <figure class="fig-tests"><figcaption>Test by test<small>Everyone's 1st test, then their 2nd, and so on. The bars shrink as people stop testing.</small></figcaption><div id="tests-chart"></div></figure>
     </div>`;
 
     $('pie').innerHTML = charts.pie({ same: g('verdict:same'), different: g('verdict:different') });
@@ -504,24 +495,20 @@ window.charts = (() => {
     const rowsOf = (groups) => {
       const sum = (suffix) => groups.reduce((t, k) => t + g(`verdict:${k}${suffix}`), 0);
       const rows = [];
-      for (let k = 0; k <= state.max_attempts; k++) rows.push({ k, people: sum(`|tests:${k}`), no: sum(`|tests:${k}|no`) });
+      for (let k = 1; sum(`|nth:${k}`) > 0; k++) rows.push({ k, people: sum(`|nth:${k}`), no: sum(`|nth:${k}|no`) });
       return rows;
     };
 
-    // Axes are fixed by everyone in this view, so selecting a slice changes the bars
-    // and never the scale.
+    // The confidence axis and the test numbers are fixed by everyone in this view, so
+    // selecting a slice changes the bars and never those scales.
     const everyone = ['same', 'different'];
     const confScale = Math.max(0, ...Object.values(confOf(everyone)));
-    const allRows = rowsOf(everyone);
-    const testsScale = {
-      people: Math.max(0, ...allRows.map((r) => r.people)),
-      k: Math.max(0, ...allRows.filter((r) => r.people > 0).map((r) => r.k)),
-    };
+    const lastTest = rowsOf(everyone).length;
 
     const drawGroup = (v) => {
       const groups = v ? [v] : everyone;
       $('conf-chart').innerHTML = charts.bars(confOf(groups), confScale);
-      $('tests-chart').innerHTML = charts.stacked(rowsOf(groups), testsScale);
+      $('tests-chart').innerHTML = charts.byTest(rowsOf(groups), lastTest);
 
       const svg = $('pie').querySelector('svg');
       svg.classList.toggle('has-focus', !!v);

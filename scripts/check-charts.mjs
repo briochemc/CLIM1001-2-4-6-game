@@ -12,14 +12,13 @@ const block = page.match(/<script>\s*\/\/ Chart builders[\s\S]*?<\/script>/)[0].
 
 globalThis.window = globalThis;
 new Function(block)();
-const { pie, bars, stacked } = globalThis.charts;
+const { pie, bars, byTest } = globalThis.charts;
 
 // A twelve-person class, with the shapes the real API produces.
 const counts = { same: 5, different: 7 };
 const conf = { certain: 4, fairly: 6, unsure: 2 };
-const rows = [];
-for (let k = 0; k <= 40; k++) rows.push({ k, people: 0, no: 0 });
-for (const [k, people, no] of [[3, 2, 1], [4, 1, 0], [5, 2, 0], [6, 4, 5], [8, 1, 0], [11, 2, 9]]) rows[k] = { k, people, no };
+// How many made a k-th test, and for how many of them it did not fit.
+const rows = [[12, 3], [12, 2], [12, 2], [10, 4], [9, 5], [7, 3], [3, 1], [3, 1], [2, 2], [2, 1], [2, 2]].map(([people, no], i) => ({ k: i + 1, people, no }));
 
 const cases = {
   'pie, three groups': pie(counts),
@@ -27,9 +26,9 @@ const cases = {
   'pie, tiny slice': pie({ same: 30, different: 1 }),
   'confidence bars': bars(conf),
   'confidence bars, empty': bars({}),
-  'tests histogram': stacked(rows),
-  'tests histogram, someone tested nothing': stacked(rows.map((r) => (r.k === 0 ? { k: 0, people: 1, no: 0 } : r))),
-  'tests histogram, up to 40': stacked(rows.map((r) => (r.k === 40 ? { k: 40, people: 1, no: 3 } : r))),
+  'test by test': byTest(rows),
+  'test by test, nobody tested anything': byTest([]),
+  'test by test, a small group on the whole class\'s axis': byTest(rows.slice(0, 3).map((r) => ({ ...r, people: 2, no: 1 })), rows.length),
 };
 
 let failed = 0;
@@ -46,7 +45,7 @@ const out = `<!doctype html><meta charset="utf-8"><title>Chart preview</title><s
 <div class="charts">
   <figure class="fig-pie"><figcaption>Did their rule match Dr. Devil's?<small>Hover or tap a slice to see just that group in the other charts.</small></figcaption>${cases['pie, three groups']}</figure>
   <figure class="fig-conf"><figcaption>How sure were they?</figcaption>${cases['confidence bars']}</figure>
-  <figure class="fig-tests"><figcaption>How many sets did they test, and how many of those fitted?</figcaption>${cases['tests histogram']}</figure>
+  <figure class="fig-tests"><figcaption>Test by test</figcaption>${cases['test by test']}</figure>
 </div>
 <h1>Every case</h1><div class="charts gallery">${Object.entries(cases)
   .map(([name, svg]) => `<figure><figcaption>${name}</figcaption>${svg}</figure>`)

@@ -169,11 +169,12 @@ async function finish(env, session, body) {
   // (scripts/grade.mjs), and the class tally catches up then.
   const auto = gradeText(session.rule, ruleText);
   const graded = { ...session, finished: now, rule_text: ruleText, confidence, verdict: auto?.verdict || null };
+  const { results: attempts } = await env.DB.prepare('SELECT n, fits FROM attempts WHERE pid = ? ORDER BY n').bind(session.pid).all();
 
   const stmts = [
     env.DB.prepare('UPDATE sessions SET finished = ?, rule_text = ?, confidence = ?, verdict = ?, graded_by = ?, graded_at = ? WHERE pid = ?')
       .bind(now, ruleText, confidence, graded.verdict, auto ? `auto:${auto.id}` : null, auto ? now : null, session.pid),
-    ...tallyRows(graded).map(([k, n]) =>
+    ...tallyRows(graded, attempts).map(([k, n]) =>
       env.DB.prepare(
         `INSERT INTO tally (ctx, rule, key, n) VALUES (?, ?, ?, ?)
          ON CONFLICT(ctx, rule, key) DO UPDATE SET n = n + excluded.n`,
