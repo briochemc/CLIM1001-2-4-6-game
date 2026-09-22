@@ -176,6 +176,7 @@
   </section>
 
   <section id="done" hidden>
+    <p id="recap"></p>
     <p id="own-status"></p>
     <p><strong>This game exposes our confirmation bias</strong>. Most of us test sets that fit the rule we had in mind (2, 4, 6 suggests "add 2 each time", so we try 8, 10, 12). Every "Fits" makes us more confident, yet it cannot show that we are right. Only a set that does <em>not</em> fit can prove our rule wrong. See how your cohort did on the game in the stats below.</p>
     <div id="stats"></div>
@@ -432,7 +433,14 @@ window.charts = (() => {
     });
   }
 
+  // Long rules are cut short here (the server accepts up to 500 characters); the full
+  // text is in the tooltip.
   function showDone() {
+    const wrote = state.rule_text || '';
+    const shown = wrote.length > 80 ? wrote.slice(0, 80).trimEnd() + '\u2026' : wrote;
+    const recap = $('recap');
+    recap.replaceChildren("Dr. Devil's rule was: ", Object.assign(document.createElement('strong'), { textContent: state.rule_name }), '. You wrote: ');
+    recap.append(Object.assign(document.createElement('em'), { textContent: `\u201c${shown}\u201d`, title: wrote }));
     $('own-status').textContent = state.role === 'instructor'
       ? 'You opened this as an instructor, so your game is not counted in the class results below.'
       : state.verdict === 'same'
