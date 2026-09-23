@@ -19,8 +19,8 @@ export const PATTERNS = {
     // Signs the player added a condition the real rule does not have.
     different: [
       { id: 'even', re: W('even|odd') },
-      { id: 'by-two', re: /(?:\b(?:by|of|in|add|adding|plus|up|step|steps|interval|intervals|difference|gap|gaps|increment|increments|jump|jumps)\s*(?:of\s*)?(?:two|2)\b)|\+\s*2\b|\b2\s*(?:apart|more|higher|bigger|larger)\b/ },
-      { id: 'by-n', re: /\b(?:by|of|add|adding|plus|step|steps|interval|intervals|difference|gap|gaps|increment|increments)\s*(?:of\s*)?(?:one|1|three|3|four|4|five|5|ten|10|\d+)\b/ },
+      { id: 'by-two', re: /(?:\b(?:by|of|in|add|adding|plus|up|step|steps|interval|intervals|difference|gap|gaps|increment|increments|jump|jumps)\s*(?:of\s*)?(?:two|2)\b(?!\s+numbers?\b))|\+\s*2\b|\b2\s*(?:apart|more|higher|bigger|larger)\b/ },
+      { id: 'by-n', re: /\b(?:by|of|add|adding|plus|step|steps|interval|intervals|difference|gap|gaps|increment|increments)\s*(?:of\s*)?(?:one|1|three|3|four|4|five|5|ten|10|\d+)\b(?!\s+numbers?\b)/ }, // "a set of three numbers" is not a step
       { id: 'equal-steps', re: /\b(?:same|equal|constant|fixed|regular|common|identical|uniform)\s+(?:amount|amounts|difference|differences|interval|intervals|step|steps|gap|gaps|increment|increments|spacing|increase|distance|jump|jumps)\b|\b(?:evenly|equally|regularly)\s+spaced\b|\barithmetic\b|\blinear\b|\bconsecutive\b/ },
       { id: 'multiples', re: W('multiple|multiples|double|doubles|doubled|doubling|times|factor|factors|divisible|square|squares|prime|primes') },
       { id: 'positive', re: W('positive|natural|non negative|nonnegative|above zero|greater than zero|more than zero') },

@@ -19,6 +19,9 @@ const CASES = [
   ['They increase, by any amount', 'same'],
   ['an ascending sequence', 'same'],
   ['the pattern is that the numbers go up', 'same'],
+  ['A set of three numbers fits when the next number is bigger than the number before', 'same'], // "of three" is not a step
+  ['A set of three numbers fits when they are in strictly increasing order', 'same'],
+  ['a set of 3 numbers where each is larger than the one before', 'same'],
   ["numbers rising, they don't have to be even", null], // negation next to a restriction: a person decides
   ['increasing by one or more', null],
 
