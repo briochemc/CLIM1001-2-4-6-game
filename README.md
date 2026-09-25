@@ -303,6 +303,24 @@ writes the verdicts back and rebuilds the class tally. `npm run grade -- --list`
 reports; `--show-auto` also prints every pattern-graded answer so you can spot mistakes;
 `--local` targets the local dev database.
 
+Pattern grades can be checked by eye too. `npm run grade -- --review` walks through every
+pattern-graded answer nobody has looked at yet, with the tests under it: Enter agrees, `s`
+or `d` corrects, `q` stops (what was reviewed so far is kept, so it can be done in
+sittings). `--review-all` walks through every checked answer, reviewed before or not.
+Each session records how its verdict came about in `sessions.graded_by`:
+
+| `graded_by` | Meaning |
+|---|---|
+| `auto:<pattern>` | the pattern decided; nobody has looked |
+| `checked:<pattern>` | the pattern decided; a person agreed |
+| `corrected:<pattern>` | the pattern decided; a person overrode it |
+| `manual` | no pattern matched; a person decided |
+
+Only `auto:` sessions are re-run through the patterns, so a review is never undone by a
+later pattern change. The summary at the end of every run gives the four counts, and
+`npm run grade -- --export` writes every answer with its state, wording and tests to
+`.wrangler/answers.md` for reading in one go.
+
 When several hand-graded answers say the same thing, add a pattern for it to
 `src/rule-patterns.js`, add the wording to `scripts/check-patterns.mjs`, run
 `npm run check-patterns`, commit, and `npm run deploy` so new students get the instant
