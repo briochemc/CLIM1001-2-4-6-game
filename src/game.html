@@ -324,6 +324,7 @@ window.charts = (() => {
   const TOKEN = "__TOKEN__";
   const state = __STATE__;
   let practice = false;
+  let counted = state.attempts.length; // tests recorded so far; at least one is needed to submit
 
   const $ = (id) => document.getElementById(id);
   const TITLES = { done: 'Cohort statistics' };
@@ -371,6 +372,7 @@ window.charts = (() => {
     $('test').disabled = true;
     try {
       const r = await call('attempt', { a: vals[0], b: vals[1], c: vals[2], practice });
+      if (r.recorded) counted++;
       addRow(vals[0], vals[1], vals[2], r.fits);
       showVerdict(r.fits, practice ? 'practice, not counted' : '');
       $('a').value = ''; $('b').value = ''; $('c').value = ''; $('a').focus();
@@ -388,6 +390,8 @@ window.charts = (() => {
 
   $('ready').addEventListener('click', () => {
     if (practice) { show('done'); return; }
+    if (!counted) { $('err-attempt').textContent = 'Test at least one set of your own first: 2, 4, 6 was only the example.'; return; }
+    $('err-attempt').textContent = '';
     show('stating');
     $('rule-text').focus();
   });

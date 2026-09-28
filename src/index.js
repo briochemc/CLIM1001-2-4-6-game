@@ -158,6 +158,7 @@ async function attempt(env, session, body) {
 
 async function finish(env, session, body) {
   if (session.finished) return json({ error: 'You have already submitted a rule.' }, 400);
+  if (!session.n_attempts) return json({ error: 'Please test at least one set of your own before writing down the rule.' }, 400);
   const ruleText = String(body.rule_text || '').trim().slice(0, 500);
   const confidence = String(body.confidence || '');
   if (!ruleText) return json({ error: 'Please write down what you think the rule is.' }, 400);

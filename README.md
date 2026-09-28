@@ -318,7 +318,8 @@ Each session records how its verdict came about in `sessions.graded_by`:
 
 At either prompt, `x` excludes the answer from the class statistics altogether, for
 answers that look copied: the usual sign is a rule written down without a single test,
-which the prompt flags with ⚠. An excluded player just sees that their game is not
+which the prompt flags with ⚠ (since 30 Sept the game refuses a rule until at least one
+set has been tested, so only earlier answers can have none). An excluded player just sees that their game is not
 counted; nothing else changes for them. Only `auto:` sessions are re-run through the
 patterns, so a review or an exclusion is never undone by a later pattern change. The summary at the end of every run gives the four counts, and
 `npm run grade -- --export` writes every answer with its state, wording and tests to
