@@ -15,10 +15,14 @@
 // Instructors' sessions are counted under keys prefixed "staff|", so student numbers
 // never include them; instructors can view students, staff, or both.
 
+// A session a person has excluded (verdict "excluded": say, a rule written down without a
+// single test, which looks copied) counts nowhere, not even as finished.
+//
 // attempts: the sets this player tested, as [{ n, fits }].
 export function tallyRows(session, attempts = []) {
-  const rows = [['finished', 1]];
   const v = session.verdict;
+  if (v === 'excluded') return [];
+  const rows = [['finished', 1]];
   if (v) {
     rows.push(
       ['graded', 1],

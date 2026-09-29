@@ -447,7 +447,9 @@ window.charts = (() => {
         ? 'Your rule has been checked: it is the same as Dr. Devil\'s.'
         : state.verdict === 'different'
           ? 'Your rule has been checked: it is not the same as Dr. Devil\'s.'
-          : 'Your rule is waiting to be checked by a real person. Come back later to see the result.';
+          : state.verdict === 'excluded'
+            ? 'Your game is not counted in the class results below.'
+            : 'Your rule is waiting to be checked by a real person. Come back later to see the result.';
     renderStats(state.stats);
     show('done');
   }

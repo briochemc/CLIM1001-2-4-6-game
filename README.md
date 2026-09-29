@@ -316,8 +316,11 @@ Each session records how its verdict came about in `sessions.graded_by`:
 | `corrected:<pattern>` | the pattern decided; a person overrode it |
 | `manual` | no pattern matched; a person decided |
 
-Only `auto:` sessions are re-run through the patterns, so a review is never undone by a
-later pattern change. The summary at the end of every run gives the four counts, and
+At either prompt, `x` excludes the answer from the class statistics altogether, for
+answers that look copied: the usual sign is a rule written down without a single test,
+which the prompt flags with ⚠. An excluded player just sees that their game is not
+counted; nothing else changes for them. Only `auto:` sessions are re-run through the
+patterns, so a review or an exclusion is never undone by a later pattern change. The summary at the end of every run gives the four counts, and
 `npm run grade -- --export` writes every answer with its state, wording and tests to
 `.wrangler/answers.md` for reading in one go.
 
